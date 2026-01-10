@@ -870,10 +870,41 @@ tbody tr.selected td {
     transform: rotate(180deg);
 }
 
+.search-actions-left {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
 .search-actions-right {
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
+}
+
+/* 僅顯示最新X筆資料篩選選項 */
+.latest-records-filter {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.9em;
+    cursor: pointer;
+}
+
+.latest-records-filter input[type="checkbox"] {
+    cursor: pointer;
+}
+
+.latest-records-filter input[type="number"] {
+    width: 55px;
+    text-align: center;
+    padding: 0.25rem 0.4rem;
+    font-size: 0.85rem;
+}
+
+.latest-records-filter input[type="number"]:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 /* ===================================

@@ -1125,6 +1125,7 @@ const TableManager = (function () {
             renderTable();
             updateDeckDatalist();
             SearchManager.updateSearchOptions();
+            SearchManager.performSearch(); // 更新搜尋結果與統計數據
         } else {
             showToast(i18n.get('toast_delete_fail'), 'error');
         }

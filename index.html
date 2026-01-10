@@ -289,8 +289,16 @@
                         <!-- 自訂欄位搜尋 -->
                         <div id="custom-search-fields" class="custom-search-fields"></div>
                         <div class="search-actions">
-                            <button id="toggle-charts-btn" class="btn btn-ghost"
-                                data-i18n="btn_toggle_charts">開關圖表顯示</button>
+                            <div class="search-actions-left">
+                                <button id="toggle-charts-btn" class="btn btn-ghost"
+                                    data-i18n="btn_toggle_charts">開關圖表顯示</button>
+                                <label class="checkbox-inline latest-records-filter">
+                                    <input type="checkbox" id="filter-latest-records">
+                                    <span data-i18n="label_latest_records">僅顯示最新</span>
+                                    <input type="number" id="filter-latest-count" min="1" max="100" value="10" disabled>
+                                    <span data-i18n="label_records_suffix">筆資料</span>
+                                </label>
+                            </div>
                             <div class="search-actions-right">
                                 <label class="checkbox-inline"
                                     style="margin-right: 1rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">

@@ -140,6 +140,23 @@ const SearchManager = (function () {
         // 圖表切換按鈕
         const toggleChartsBtn = document.getElementById('toggle-charts-btn');
         if (toggleChartsBtn) toggleChartsBtn.addEventListener('click', toggleCharts);
+
+        // 最新資料篩選功能
+        const filterLatestCheckbox = document.getElementById('filter-latest-records');
+        const filterLatestCount = document.getElementById('filter-latest-count');
+        if (filterLatestCheckbox && filterLatestCount) {
+            // 勾選時啟用數字輸入框
+            filterLatestCheckbox.addEventListener('change', () => {
+                filterLatestCount.disabled = !filterLatestCheckbox.checked;
+                performSearch();
+            });
+            // 數字變更時重新搜尋
+            filterLatestCount.addEventListener('change', () => {
+                if (filterLatestCheckbox.checked) {
+                    performSearch();
+                }
+            });
+        }
     }
 
     /**
@@ -289,6 +306,15 @@ const SearchManager = (function () {
         // 依目前排序欄位與方向排序
         currentResults = DataManager.sortRecords(currentResults, sortField, sortDirection);
 
+        // 僅顯示最新X筆資料篩選
+        const filterLatestCheckbox = document.getElementById('filter-latest-records');
+        const filterLatestCount = document.getElementById('filter-latest-count');
+        if (filterLatestCheckbox && filterLatestCheckbox.checked && filterLatestCount) {
+            const count = parseInt(filterLatestCount.value) || 10;
+            const validCount = Math.min(Math.max(count, 1), 100); // 限制 1-100
+            currentResults = currentResults.slice(0, validCount);
+        }
+
         // 更新顯示
         renderSearchResults();
         updateStatistics();
@@ -367,6 +393,17 @@ const SearchManager = (function () {
         // 確保關鍵字欄位被清除 (有時 ID 優先級更高)
         const keywordInput = document.getElementById('search-keyword');
         if (keywordInput) keywordInput.value = '';
+
+        // 重置「僅顯示最新X筆資料」選項
+        const filterLatestCheckbox = document.getElementById('filter-latest-records');
+        const filterLatestCount = document.getElementById('filter-latest-count');
+        if (filterLatestCheckbox) {
+            filterLatestCheckbox.checked = false;
+        }
+        if (filterLatestCount) {
+            filterLatestCount.value = '10';
+            filterLatestCount.disabled = true;
+        }
 
         // 觸發搜尋更新
         performSearch();
@@ -644,6 +681,9 @@ const SearchManager = (function () {
                 document.getElementById('stat-first-win-rate').textContent = '0%';
                 document.getElementById('stat-second-win-rate').textContent = '0%';
             }
+            // 清除附註
+            const statTotalNoteEl = document.getElementById('stat-total-note');
+            if (statTotalNoteEl) statTotalNoteEl.innerHTML = '';
             return;
         }
 
