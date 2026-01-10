@@ -924,13 +924,29 @@
             }
 
             /**
-             * 渲染：牌組分布圖
+             * 渲染:牌組分布圖
              */
             function renderDeckChart(providedRecords = null) {
+                // 顏色調色盤
+                const colorPalette = [
+                    'hsl(280, 70%, 60%)',   // 紫色
+                    'hsl(145, 70%, 50%)',   // 綠色
+                    'hsl(45, 100%, 55%)',   // 黃色
+                    'hsl(0, 70%, 55%)',     // 紅色
+                    'hsl(200, 80%, 55%)',   // 藍色
+                    'hsl(320, 70%, 60%)',   // 粉紅
+                    'hsl(30, 90%, 55%)',    // 橙色
+                    'hsl(170, 70%, 50%)',   // 青綠
+                    'hsl(260, 60%, 65%)',   // 淡紫
+                    'hsl(60, 80%, 50%)'     // 黃綠
+                ];
+
                 document.getElementById('popout-content').innerHTML = `
-                    <div class="card chart-card">
-                        <div class="chart-container">
-                            <canvas id="popout-deck-chart"></canvas>
+                    <div class="card chart-card" style="height: auto;">
+                        <div style="padding: 1.2rem;">
+                            <div style="height: 500px;">
+                                <canvas id="popout-deck-chart"></canvas>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -938,7 +954,6 @@
                 setTimeout(() => {
                     let records = providedRecords;
                     if (!records) {
-                        // 優先使用過濾後的搜尋結果
                         try {
                             const stored = localStorage.getItem('cardBattleSearchResults');
                             if (stored) {
@@ -947,42 +962,122 @@
                         } catch (e) {
                             console.error('Failed to load search results:', e);
                         }
-                        // 若搜尋結果為空，則使用全部紀錄
                         if (!records || records.length === 0) {
                             records = DataManager.getRecords();
                         }
                     }
+
                     const ctx = document.getElementById('popout-deck-chart');
-                    if (ctx && records.length > 0) {
-                        const deckCounts = {};
 
-                        records.forEach(r => {
-                            if (r.opponentDeck) {
-                                deckCounts[r.opponentDeck] = (deckCounts[r.opponentDeck] || 0) + 1;
-                            }
-                        });
-
-                        const labels = Object.keys(deckCounts);
-                        const data = Object.values(deckCounts);
-                        const colors = labels.map((_, i) => `hsl(${(i * 360 / labels.length)}, 70%, 60%)`);
-
-                        new Chart(ctx, {
-                            type: 'doughnut',
-                            data: {
-                                labels,
-                                datasets: [{
-                                    data,
-                                    backgroundColor: colors
-                                }]
-                            },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: false
-                            }
-                        });
+                    if (!records || records.length === 0) {
+                        ctx.parentElement.innerHTML = '<div style="color: var(--text-muted); padding: 1rem; text-align: center;">沒有資料可顯示</div>';
+                        return;
                     }
-                }, 100);
+
+                    // 統計對手牌組分布
+                    const deckCounts = {};
+                    records.forEach(r => {
+                        if (r.opponentDeck) {
+                            deckCounts[r.opponentDeck] = (deckCounts[r.opponentDeck] || 0) + 1;
+                        }
+                    });
+
+                    // 排序
+                    const sortedDecks = Object.entries(deckCounts).sort((a, b) => b[1] - a[1]);
+
+                    if (sortedDecks.length === 0) {
+                        ctx.parentElement.innerHTML = '<div style="color: var(--text-muted); padding: 1rem; text-align: center;">沒有對手牌組資料</div>';
+                        return;
+                    }
+
+                    const totalGames = records.length;
+
+                    // 如果超過10種牌組,將後面的合併為「其他」
+                    let displayDecks = [];
+                    let othersData = [];
+
+                    if (sortedDecks.length > 10) {
+                        const top9 = sortedDecks.slice(0, 9);
+                        const others = sortedDecks.slice(9);
+                        const othersSum = others.reduce((sum, [_, count]) => sum + count, 0);
+                        othersData = others;
+
+                        displayDecks = [...top9, [i18n.get('opt_others') || '其他', othersSum]];
+                    } else {
+                        displayDecks = sortedDecks;
+                    }
+
+                    const labels = displayDecks.map(([deck]) => deck);
+                    const data = displayDecks.map(([_, count]) => count);
+                    const colors = displayDecks.map((_, i) => colorPalette[i % colorPalette.length]);
+
+                    // 創建圖表 (啟用預設圖例)
+                    new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels,
+                            datasets: [{
+                                data,
+                                backgroundColor: colors,
+                                borderColor: '#ffffff',
+                                borderWidth: 2,
+                                hoverOffset: 10
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'top',
+                                    labels: {
+                                        color: 'hsla(0, 0%, 100%, 0.9)',
+                                        padding: 15,
+                                        usePointStyle: true,
+                                        pointStyle: 'rect',
+                                        boxWidth: 18,
+                                        boxHeight: 14,
+                                        font: {
+                                            size: 14
+                                        }
+                                    }
+                                },
+                                tooltip: {
+                                    backgroundColor: 'hsla(230, 25%, 15%, 0.95)',
+                                    titleColor: '#fff',
+                                    bodyColor: '#fff',
+                                    borderColor: 'hsla(250, 80%, 60%, 0.5)',
+                                    borderWidth: 1,
+                                    padding: 12,
+                                    callbacks: {
+                                        label: function (context) {
+                                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                            const percentage = ((context.raw / total) * 100).toFixed(1);
+                                            return `${context.label}: ${context.raw} 場 (${percentage}%)`;
+                                        },
+                                        afterBody: function (context) {
+                                            // 如果是「其他」類別,顯示詳細資訊
+                                            const othersLabel = i18n.get('opt_others') || '其他';
+                                            if (context[0] && context[0].label === othersLabel && othersData.length > 0) {
+                                                const lines = ['', '包含:'];
+                                                othersData.forEach(([deck, count]) => {
+                                                    const pct = ((count / totalGames) * 100).toFixed(1);
+                                                    lines.push(`  ${deck}: ${count}場 (${pct}%)`);
+                                                });
+                                                return lines;
+                                            }
+                                            return [];
+                                        }
+                                    }
+                                }
+                            },
+                            cutout: '50%'
+                        }
+                    });
+                }, 200);
             }
+
+
 
             /**
              * 渲染：統計摘要

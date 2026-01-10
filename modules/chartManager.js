@@ -186,13 +186,7 @@ const ChartManager = (function () {
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
-                        position: 'right',
-                        labels: {
-                            color: 'hsla(0, 0%, 100%, 0.8)',
-                            padding: 15,
-                            usePointStyle: true,
-                            pointStyle: 'circle'
-                        }
+                        display: false
                     },
                     tooltip: {
                         backgroundColor: 'hsla(230, 25%, 15%, 0.95)',
@@ -281,7 +275,7 @@ const ChartManager = (function () {
         // 統計對手牌組分布
         const deckCounts = {};
         records.forEach(r => {
-            const deck = r.opponentDeck || i18n.get('opt_all'); // 或者用 'Unknown'，這裡暫時隨意
+            const deck = r.opponentDeck || i18n.get('opt_all');
             deckCounts[deck] = (deckCounts[deck] || 0) + 1;
         });
 
@@ -289,28 +283,131 @@ const ChartManager = (function () {
         const sortedDecks = Object.entries(deckCounts)
             .sort((a, b) => b[1] - a[1]);
 
-        // 如果超過 10 種牌組，將後面的合併為「其他」
+        // 計算總場次用於百分比
+        const totalGames = records.length;
+
+        // 如果超過 10 種牌組,將後面的合併為「其他」
         let labels = [];
         let data = [];
+        let legendData = [];
         othersData = []; // 重置
 
         if (sortedDecks.length > 10) {
             const top9 = sortedDecks.slice(0, 9);
             const others = sortedDecks.slice(9);
             const othersSum = others.reduce((sum, [_, count]) => sum + count, 0);
-            othersData = others; // 存入明細
+            othersData = others;
 
-            labels = [...top9.map(([deck]) => deck), i18n.get('opt_others')];
+            labels = top9.map(([deck], index) => deck);
+            labels.push(i18n.get('opt_others'));
             data = [...top9.map(([_, count]) => count), othersSum];
+
+            // 準備圖例資料
+            legendData = top9.map(([deck, count], index) => ({
+                deck,
+                count,
+                percentage: ((count / totalGames) * 100).toFixed(1),
+                color: colorPalette[index]
+            }));
+            legendData.push({
+                deck: i18n.get('opt_others'),
+                count: othersSum,
+                percentage: ((othersSum / totalGames) * 100).toFixed(1),
+                color: colorPalette[9]
+            });
         } else {
             labels = sortedDecks.map(([deck]) => deck);
             data = sortedDecks.map(([_, count]) => count);
+
+            // 準備圖例資料
+            legendData = sortedDecks.map(([deck, count], index) => ({
+                deck,
+                count,
+                percentage: ((count / totalGames) * 100).toFixed(1),
+                color: colorPalette[index]
+            }));
         }
 
         deckChart.data.labels = labels;
         deckChart.data.datasets[0].data = data;
         deckChart.update();
+
+        // 渲染自定義圖例
+        renderDeckChartLegend(legendData);
     }
+
+    /**
+     * 渲染自定義圖例
+     */
+    function renderDeckChartLegend(legendData) {
+        const legendContainer = document.getElementById('deck-chart-legend');
+        if (!legendContainer) return;
+
+        if (!legendData || legendData.length === 0) {
+            legendContainer.innerHTML = '<div style="color: var(--text-muted); padding: 0.5rem;">無資料</div>';
+            return;
+        }
+
+        const html = legendData.map((item, index) => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.2rem 0.3rem; border-bottom: 1px solid var(--border-color); font-size: 0.85rem;">
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                    <span style="width: 10px; height: 10px; border-radius: 50%; background: ${item.color}; display: inline-block; flex-shrink: 0;"></span>
+                    <span style="color: var(--text-primary);">${index + 1}. ${item.deck}</span>
+                </div>
+                <div style="color: var(--text-secondary); white-space: nowrap; margin-left: 0.5rem;">
+                    ${item.count}場 (${item.percentage}%)
+                </div>
+            </div>
+        `).join('');
+
+        legendContainer.innerHTML = html;
+    }
+
+    /**
+     * 更新對手牌組分布詳細列表
+     */
+    function updateDeckDistributionList(sortedDecks, totalGames) {
+        const listContainer = document.getElementById('deck-distribution-list');
+        if (!listContainer) return;
+
+        if (sortedDecks.length === 0) {
+            listContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 1rem;">無對手牌組資料</div>';
+            return;
+        }
+
+        const listItems = sortedDecks.map(([deck, count], index) => {
+            const percentage = ((count / totalGames) * 100).toFixed(1);
+            const rank = index + 1;
+
+            return `
+                <div class="deck-item" style="display: flex; align-items: center; padding: 0.25rem 0; border-bottom: 1px solid var(--border-color);">
+                    <div class="deck-rank" style="flex: 0 0 24px; font-weight: bold; color: var(--primary); font-size: 0.75rem;">#${rank}</div>
+                    <div class="deck-name" style="flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 0.3rem; font-size: 0.8rem;" title="${escapeHtml(deck)}">${escapeHtml(deck)}</div>
+                    <div class="deck-stats" style="flex: 0 0 70px; text-align: right; font-size: 0.75rem;">
+                        <div style="color: var(--text-primary);">${count}</div>
+                        <div style="color: var(--text-muted); font-size: 0.7rem;">${percentage}%</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        listContainer.innerHTML = `
+            <div style="padding: 0.3rem 0.5rem;">
+                <div style="font-weight: bold; margin-bottom: 0.3rem; color: var(--text-primary); font-size: 0.85rem;">
+                    ${i18n.get('header_deck_dist') || '對手牌組分布'}
+                </div>
+                ${listItems}
+            </div>
+        `;
+    }
+
+    function escapeHtml(text) {
+        if (text === null || text === undefined) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
 
     /**
      * 銷毀圖表

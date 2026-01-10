@@ -938,6 +938,48 @@ tbody tr.selected td {
     width: 100%;
 }
 
+/* 牌組分布詳細列表 */
+.deck-distribution-list {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-sm);
+}
+
+.deck-distribution-list .deck-item {
+    transition: background var(--transition-fast);
+}
+
+.deck-distribution-list .deck-item:hover {
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+}
+
+.deck-distribution-list .deck-item:last-child {
+    border-bottom: none;
+}
+
+.deck-distribution-list .deck-rank {
+    font-family: 'Courier New', monospace;
+}
+
+.deck-distribution-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.deck-distribution-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.deck-distribution-list::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+.deck-distribution-list::-webkit-scrollbar-thumb:hover {
+    background: var(--primary);
+}
+
+
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
