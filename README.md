@@ -2,6 +2,22 @@
 
 一個用於記錄卡牌遊戲對戰歷史的網頁應用程式，支援資料輸入、搜尋篩選與統計視覺化功能。
 
+## 📥 下載與安裝
+
+### 方法一：從 GitHub 下載
+1. 點擊頁面右上方的綠色 **「Code」** 按鈕
+2. 選擇 **「Download ZIP」**
+3. 解壓縮下載的 ZIP 檔案到任意資料夾
+4. 雙擊開啟 `index.html` 即可使用！
+
+### 方法二：使用 Git Clone
+```bash
+git clone https://github.com/你的帳號/card-battle-tracker.git
+cd card-battle-tracker
+```
+
+> 💡 **提示**：此程式完全在本機運行，不需要安裝任何軟體或網路連線！
+
 ## ✨ 功能特色
 
 ### 📝 紀錄輸入
