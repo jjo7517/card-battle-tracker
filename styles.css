@@ -300,6 +300,16 @@ body::before {
     border-color: hsla(var(--primary-hue), 80%, 60%, 0.3);
 }
 
+.search-card {
+    position: relative;
+    z-index: 10;
+}
+
+.charts-grid {
+    position: relative;
+    z-index: 1;
+}
+
 .card-header {
     display: flex;
     justify-content: space-between;
