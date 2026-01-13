@@ -13,16 +13,25 @@ const SearchManager = (function () {
     let currentPage = 1;
     const pageSize = 100;
 
+    // 排除選項狀態
+    let excludedDates = new Set();
+    let excludedMyDecks = new Set();
+    let excludedOpponentDecks = new Set();
+    let excludedMisplay = new Set();
+    let isExclusionExpanded = false;
+
     /**
      * 初始化搜尋管理器
      */
     function init() {
         bindEvents();
         updateSearchOptions();
+        initExclusionSection();
 
         // 監聽語言切換事件
         window.addEventListener('languageChanged', () => {
             updateSearchOptions();
+            updateExclusionOptions();
             performSearch(); // 語系切換時重新搜尋以更新顯示
         });
 
@@ -63,6 +72,7 @@ const SearchManager = (function () {
                     message.type === SyncManager.EventTypes.RECORD_UPDATED ||
                     message.type === SyncManager.EventTypes.RECORD_DELETED ||
                     message.type === SyncManager.EventTypes.RECORDS_IMPORTED) {
+                    updateExclusionOptions();
                     performSearch();
                 }
             });
@@ -221,6 +231,215 @@ const SearchManager = (function () {
                 }
             };
         }
+
+        // 更新排除選項
+        updateExclusionOptions();
+    }
+
+    /**
+     * 初始化排除區塊
+     */
+    function initExclusionSection() {
+        const toggleBtn = document.getElementById('toggle-exclusions-btn');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', toggleExclusionSection);
+        }
+
+        // 點擊頁面其他地方時關閉所有多選下拉選單
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.multi-select')) {
+                document.querySelectorAll('.multi-select-dropdown.open').forEach(dropdown => {
+                    dropdown.classList.remove('open');
+                    dropdown.closest('.multi-select').querySelector('.multi-select-trigger')?.classList.remove('active');
+                });
+            }
+        });
+    }
+
+    /**
+     * 切換排除區塊展開/收起
+     */
+    function toggleExclusionSection() {
+        const btn = document.getElementById('toggle-exclusions-btn');
+        const options = document.getElementById('exclusion-options');
+        if (!btn || !options) return;
+
+        isExclusionExpanded = !isExclusionExpanded;
+
+        if (isExclusionExpanded) {
+            options.classList.remove('collapsed');
+            btn.classList.add('expanded');
+        } else {
+            options.classList.add('collapsed');
+            btn.classList.remove('expanded');
+        }
+    }
+
+    /**
+     * 更新排除選項的可選項目
+     */
+    function updateExclusionOptions() {
+        if (typeof DataManager === 'undefined') return;
+
+        const allRecords = DataManager.getAllRecords();
+        const { myDecks, opponentDecks } = DataManager.getAllDeckNames();
+
+        // 取得所有不重複的日期，從早到晚排序
+        const dates = [...new Set(allRecords.map(r => r.date).filter(Boolean))].sort();
+
+        // 渣操等級選項
+        const misplayLevels = ['無', '輕度', '中等', '嚴重'];
+
+        // 建立多選元件
+        createMultiSelect('exclude-dates-container', dates, 'ph_select_to_exclude', excludedDates, (selected) => {
+            excludedDates = selected;
+            performSearch();
+        });
+
+        createMultiSelect('exclude-my-decks-container', myDecks, 'ph_select_to_exclude', excludedMyDecks, (selected) => {
+            excludedMyDecks = selected;
+            performSearch();
+        });
+
+        createMultiSelect('exclude-opponent-decks-container', opponentDecks, 'ph_select_to_exclude', excludedOpponentDecks, (selected) => {
+            excludedOpponentDecks = selected;
+            performSearch();
+        });
+
+        createMultiSelect('exclude-misplay-container', misplayLevels, 'ph_select_to_exclude', excludedMisplay, (selected) => {
+            excludedMisplay = selected;
+            performSearch();
+        }, true); // 需要翻譯
+    }
+
+    /**
+     * 建立多選下拉元件
+     */
+    function createMultiSelect(containerId, options, placeholderKey, selectedSet, onChange, translateOptions = false) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        const placeholder = i18n.get(placeholderKey);
+
+        // 建立觸發器
+        const trigger = document.createElement('div');
+        trigger.className = 'multi-select-trigger';
+        trigger.innerHTML = selectedSet.size === 0
+            ? `<span class="multi-select-placeholder">${escapeHtml(placeholder)}</span>`
+            : '';
+
+        // 顯示已選標籤
+        const tagsContainer = document.createElement('div');
+        tagsContainer.className = 'multi-select-tags';
+        selectedSet.forEach(value => {
+            const tag = createTag(value, translateOptions);
+            tag.querySelector('.multi-select-tag-remove').addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectedSet.delete(value);
+                onChange(selectedSet);
+            });
+            tagsContainer.appendChild(tag);
+        });
+        if (selectedSet.size > 0) {
+            trigger.appendChild(tagsContainer);
+        }
+
+        // 建立下拉選單
+        const dropdown = document.createElement('div');
+        dropdown.className = 'multi-select-dropdown';
+
+        if (options.length === 0) {
+            dropdown.innerHTML = `<div class="multi-select-empty">-</div>`;
+        } else {
+            // 建立 grid 容器
+            const gridContainer = document.createElement('div');
+            gridContainer.className = 'multi-select-dropdown-grid';
+
+            options.forEach(option => {
+                const optionDiv = document.createElement('div');
+                optionDiv.className = 'multi-select-option' + (selectedSet.has(option) ? ' selected' : '');
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = selectedSet.has(option);
+                checkbox.id = `${containerId}-${option}`;
+
+                const label = document.createElement('label');
+                label.htmlFor = checkbox.id;
+                label.textContent = translateOptions ? i18n.get(option) : option;
+
+                optionDiv.appendChild(checkbox);
+                optionDiv.appendChild(label);
+
+                optionDiv.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (checkbox.checked) {
+                        checkbox.checked = false;
+                        selectedSet.delete(option);
+                        optionDiv.classList.remove('selected');
+                    } else {
+                        checkbox.checked = true;
+                        selectedSet.add(option);
+                        optionDiv.classList.add('selected');
+                    }
+                    onChange(selectedSet);
+                });
+
+                gridContainer.appendChild(optionDiv);
+            });
+
+            dropdown.appendChild(gridContainer);
+        }
+
+        // 點擊觸發器顯示/隱藏下拉選單
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // 關閉其他開啟的下拉選單
+            document.querySelectorAll('.multi-select-dropdown.open').forEach(d => {
+                if (d !== dropdown) {
+                    d.classList.remove('open');
+                    d.classList.remove('dropdown-upward');
+                    d.closest('.multi-select').querySelector('.multi-select-trigger')?.classList.remove('active');
+                }
+            });
+
+            const isOpening = !dropdown.classList.contains('open');
+            dropdown.classList.toggle('open');
+            trigger.classList.toggle('active', dropdown.classList.contains('open'));
+
+            // 智能定位：判斷是否需要向上開啟
+            if (isOpening) {
+                const triggerRect = trigger.getBoundingClientRect();
+                const dropdownMaxHeight = 350; // 與 CSS max-height 一致
+                const spaceBelow = window.innerHeight - triggerRect.bottom;
+                const spaceAbove = triggerRect.top;
+
+                // 如果下方空間不足但上方空間充足，則向上開啟
+                if (spaceBelow < dropdownMaxHeight && spaceAbove > spaceBelow) {
+                    dropdown.classList.add('dropdown-upward');
+                } else {
+                    dropdown.classList.remove('dropdown-upward');
+                }
+            }
+        });
+
+        // 清空容器並插入元素
+        container.innerHTML = '';
+        container.appendChild(trigger);
+        container.appendChild(dropdown);
+    }
+
+    /**
+     * 建立選擇標籤
+     */
+    function createTag(value, translate = false) {
+        const tag = document.createElement('span');
+        tag.className = 'multi-select-tag';
+        tag.innerHTML = `
+            ${escapeHtml(translate ? i18n.get(value) : value)}
+            <button type="button" class="multi-select-tag-remove" data-value="${escapeHtml(value)}">×</button>
+        `;
+        return tag;
     }
 
     /**
@@ -252,6 +471,25 @@ const SearchManager = (function () {
 
         // 篩選紀錄
         currentResults = allRecords.filter(record => {
+            // === 排除條件 ===
+            // 排除對戰日期
+            if (excludedDates.size > 0 && record.date && excludedDates.has(record.date)) {
+                return false;
+            }
+            // 排除己方牌組
+            if (excludedMyDecks.size > 0 && record.myDeck && excludedMyDecks.has(record.myDeck)) {
+                return false;
+            }
+            // 排除對手牌組
+            if (excludedOpponentDecks.size > 0 && record.opponentDeck && excludedOpponentDecks.has(record.opponentDeck)) {
+                return false;
+            }
+            // 排除渣操程度
+            if (excludedMisplay.size > 0 && record.misplay && excludedMisplay.has(record.misplay)) {
+                return false;
+            }
+
+            // === 篩選條件 ===
             // 日期範圍
             if (filters.dateStart && record.date) {
                 const recordDateStr = record.date.replace(/\//g, '-');
@@ -404,6 +642,13 @@ const SearchManager = (function () {
             filterLatestCount.value = '10';
             filterLatestCount.disabled = true;
         }
+
+        // 重置排除選項
+        excludedDates.clear();
+        excludedMyDecks.clear();
+        excludedOpponentDecks.clear();
+        excludedMisplay.clear();
+        updateExclusionOptions();
 
         // 觸發搜尋更新
         performSearch();

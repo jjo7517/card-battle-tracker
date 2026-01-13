@@ -288,6 +288,39 @@
                         </div>
                         <!-- 自訂欄位搜尋 -->
                         <div id="custom-search-fields" class="custom-search-fields"></div>
+
+                        <!-- 排除選項區塊 -->
+                        <div class="exclusion-section">
+                            <button type="button" id="toggle-exclusions-btn" class="btn btn-ghost exclusion-toggle">
+                                <span data-i18n="btn_toggle_exclusions">🚫 搜尋範圍排除</span>
+                                <span class="exclusion-toggle-icon">▼</span>
+                            </button>
+                            <div id="exclusion-options" class="exclusion-options collapsed">
+                                <div class="search-grid">
+                                    <!-- 排除對戰日期 -->
+                                    <div class="form-group">
+                                        <label data-i18n="label_exclude_dates">🚫 排除對戰日期</label>
+                                        <div class="multi-select" id="exclude-dates-container"></div>
+                                    </div>
+                                    <!-- 排除己方牌組 -->
+                                    <div class="form-group">
+                                        <label data-i18n="label_exclude_my_decks">🚫 排除己方牌組</label>
+                                        <div class="multi-select" id="exclude-my-decks-container"></div>
+                                    </div>
+                                    <!-- 排除對手牌組 -->
+                                    <div class="form-group">
+                                        <label data-i18n="label_exclude_opponent_decks">🚫 排除對手牌組</label>
+                                        <div class="multi-select" id="exclude-opponent-decks-container"></div>
+                                    </div>
+                                    <!-- 排除渣操程度 -->
+                                    <div class="form-group">
+                                        <label data-i18n="label_exclude_misplay">🚫 排除渣操程度</label>
+                                        <div class="multi-select" id="exclude-misplay-container"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="search-actions">
                             <div class="search-actions-left">
                                 <button id="toggle-charts-btn" class="btn btn-ghost"

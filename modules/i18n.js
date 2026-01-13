@@ -190,7 +190,14 @@ const i18n = (function () {
             'text_synced': '已同步',
             'btn_simple_display': '簡易顯示',
             'btn_standard_display': '標準顯示',
-            'toast_popup_blocked': '彈出視窗被阻擋，請允許此網站的彈出視窗'
+            'toast_popup_blocked': '彈出視窗被阻擋，請允許此網站的彈出視窗',
+            // Exclusion
+            'btn_toggle_exclusions': '🚫 搜尋範圍排除',
+            'label_exclude_dates': '🚫 排除對戰日期',
+            'label_exclude_my_decks': '🚫 排除己方牌組',
+            'label_exclude_opponent_decks': '🚫 排除對手牌組',
+            'label_exclude_misplay': '🚫 排除渣操程度',
+            'ph_select_to_exclude': '選擇要排除的項目...'
         },
         'en': {
             // General
@@ -374,7 +381,14 @@ const i18n = (function () {
             'text_synced': 'Synced',
             'btn_simple_display': 'Simple Display',
             'btn_standard_display': 'Standard Display',
-            'toast_popup_blocked': 'Popup blocked. Please allow popups for this site.'
+            'toast_popup_blocked': 'Popup blocked. Please allow popups for this site.',
+            // Exclusion
+            'btn_toggle_exclusions': '🚫 Exclusion Filters',
+            'label_exclude_dates': '🚫 Exclude Dates',
+            'label_exclude_my_decks': '🚫 Exclude My Decks',
+            'label_exclude_opponent_decks': '🚫 Exclude Opp. Decks',
+            'label_exclude_misplay': '🚫 Exclude Misplay',
+            'ph_select_to_exclude': 'Select to exclude...'
         },
         'ja': {
             // General
@@ -558,7 +572,14 @@ const i18n = (function () {
             'text_synced': '同期済み',
             'btn_simple_display': 'シンプル表示',
             'btn_standard_display': '標準表示',
-            'toast_popup_blocked': 'ポップアップがブロックされました。許可してください。'
+            'toast_popup_blocked': 'ポップアップがブロックされました。許可してください。',
+            // Exclusion
+            'btn_toggle_exclusions': '🚫 除外フィルター',
+            'label_exclude_dates': '🚫 日付を除外',
+            'label_exclude_my_decks': '🚫 自デッキ除外',
+            'label_exclude_opponent_decks': '🚫 相手デッキ除外',
+            'label_exclude_misplay': '🚫 プレミ除外',
+            'ph_select_to_exclude': '除外する項目を選択...'
         }
     };
 
