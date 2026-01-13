@@ -292,7 +292,7 @@ body::before {
     border-radius: var(--radius-lg);
     margin-bottom: var(--spacing-lg);
     box-shadow: var(--shadow-md);
-    overflow: hidden;
+    overflow: visible;
     transition: all var(--transition-normal);
 }
 
