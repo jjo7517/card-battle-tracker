@@ -371,18 +371,25 @@ const SearchManager = (function () {
                 optionDiv.appendChild(checkbox);
                 optionDiv.appendChild(label);
 
-                optionDiv.addEventListener('click', (e) => {
-                    e.stopPropagation();
+                // 處理勾選狀態改變
+                checkbox.addEventListener('change', (e) => {
                     if (checkbox.checked) {
-                        checkbox.checked = false;
-                        selectedSet.delete(option);
-                        optionDiv.classList.remove('selected');
-                    } else {
-                        checkbox.checked = true;
                         selectedSet.add(option);
                         optionDiv.classList.add('selected');
+                    } else {
+                        selectedSet.delete(option);
+                        optionDiv.classList.remove('selected');
                     }
                     onChange(selectedSet);
+                });
+
+                // 讓整個選項容器都可點擊
+                optionDiv.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    // 如果點擊的不是 checkbox 或 label (因 label 帶有 for，會自動點擊 checkbox)，則手動觸發點擊
+                    if (e.target !== checkbox && e.target !== label) {
+                        checkbox.click();
+                    }
                 });
 
                 gridContainer.appendChild(optionDiv);
