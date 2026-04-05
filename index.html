@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎴 卡牌對戰紀錄追蹤器</title>
+    <meta name="description" content="記錄您的卡牌遊戲對戰歷史，追蹤勝率與統計數據">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- 頂部導航 -->
+        <header class="header">
+            <div class="logo">
+                <span class="logo-icon">🎴</span>
+                <h1 data-i18n="app_title">卡牌對戰紀錄追蹤器</h1>
+            </div>
+            <div class="header-right">
+                <button id="btn-unified-mode" class="btn btn-ghost" style="margin-right: 10px;">
+                    🔀 <span data-i18n="btn_unified_view">合併顯示</span>
+                </button>
+                <div class="language-selector">
+                    <select id="lang-select">
+                        <option value="zh-TW">繁體中文</option>
+                        <option value="en">English</option>
+                        <option value="ja">日本語</option>
+                    </select>
+                </div>
+                <nav class="nav-tabs">
+                    <button class="nav-tab active" data-tab="records">
+                        <span class="tab-icon">📝</span>
+                        <span data-i18n="tab_records">紀錄輸入</span>
+                    </button>
+                    <button class="nav-tab" data-tab="search">
+                        <span class="tab-icon">🔍</span>
+                        <span data-i18n="tab_search">搜尋統計</span>
+                    </button>
+                </nav>
+            </div>
+        </header>
+
+        <!-- 主要內容區 -->
+        <main class="main-content">
+            <!-- 紀錄輸入頁面 -->
+            <section id="records-page" class="page active">
+                <!-- 新增紀錄表單 -->
+                <div class="card form-card" id="form-card">
+                    <div class="card-header">
+                        <h2 data-i18n="header_add_record">➕ 新增對戰紀錄</h2>
+                        <div class="card-header-actions">
+                            <button class="popout-btn btn btn-ghost btn-sm" data-popout-target="form-card"
+                                data-tooltip="在彈出視窗中開啟" onclick="PopoutManager.toggle('form-card')">🗗</button>
+                            <button id="toggle-form-btn" class="btn btn-ghost">
+                                <span class="collapse-icon">▼</span>
+                            </button>
+                        </div>
+                    </div>
+                    <form id="record-form" class="record-form">
+                        <div class="form-grid">
+                            <!-- 第一行 -->
+                            <div class="form-group">
+                                <label for="battle-date" data-i18n="label_date">📅 對戰日期</label>
+                                <input type="date" id="battle-date">
+                            </div>
+                            <div class="form-group">
+                                <label for="my-deck" data-i18n="label_my_deck">🎴 己方牌組</label>
+                                <input type="text" id="my-deck" data-i18n-placeholder="ph_deck_name"
+                                    placeholder="輸入牌組名稱" required list="my-deck-list">
+                                <datalist id="my-deck-list"></datalist>
+                            </div>
+                            <div class="form-group">
+                                <label for="opponent-deck" data-i18n="label_opponent_deck">🎴 對手牌組</label>
+                                <input type="text" id="opponent-deck" data-i18n-placeholder="ph_deck_name"
+                                    placeholder="輸入牌組名稱" required list="opponent-deck-list">
+                                <datalist id="opponent-deck-list"></datalist>
+                            </div>
+
+                            <!-- 第二行 -->
+                            <div class="form-group">
+                                <label data-i18n="label_turn_order">🔄 先後手</label>
+                                <div class="btn-group" id="turn-order-group">
+                                    <button type="button" class="btn-group-item" data-value="先手" data-i18n="opt_first">先手</button>
+                                    <button type="button" class="btn-group-item" data-value="後手" data-i18n="opt_second">後手</button>
+                                    <button type="button" class="btn-group-item" data-value="被讓先" data-i18n="opt_granted_first">被讓先</button>
+                                </div>
+                                <input type="hidden" id="turn-order" value="">
+                            </div>
+                            <div class="form-group">
+                                <label data-i18n="label_result">🏆 勝負</label>
+                                <div class="btn-group" id="result-group">
+                                    <button type="button" class="btn-group-item" data-value="勝利" data-i18n="opt_win">勝利</button>
+                                    <button type="button" class="btn-group-item" data-value="敗北" data-i18n="opt_lose">敗北</button>
+                                    <button type="button" class="btn-group-item" data-value="平手" data-i18n="opt_draw">平手</button>
+                                </div>
+                                <input type="hidden" id="result" value="">
+                            </div>
+                            <div class="form-group">
+                                <label for="score" data-i18n="label_score">📊 當前分數</label>
+                                <input type="number" id="score" data-i18n-placeholder="ph_score" placeholder="輸入分數">
+                            </div>
+
+                            <!-- 第三行 -->
+                            <div class="form-group">
+                                <label data-i18n="label_misplay">⚠️ 渣操等級</label>
+                                <div class="btn-group" id="misplay-group">
+                                    <button type="button" class="btn-group-item active" data-value="" data-i18n="opt_not_selected">未選擇</button>
+                                    <button type="button" class="btn-group-item" data-value="無" data-i18n="opt_none">無</button>
+                                    <button type="button" class="btn-group-item" data-value="輕度" data-i18n="opt_light">輕度</button>
+                                    <button type="button" class="btn-group-item" data-value="中等" data-i18n="opt_medium">中等</button>
+                                    <button type="button" class="btn-group-item" data-value="嚴重" data-i18n="opt_severe">嚴重</button>
+                                </div>
+                                <input type="hidden" id="misplay" value="">
+                            </div>
+                            <div class="form-group">
+                                <label for="misplay-note" data-i18n="label_misplay_note">📝 渣操備註</label>
+                                <input type="text" id="misplay-note" data-i18n-placeholder="ph_optional"
+                                    placeholder="選填">
+                            </div>
+                            <div class="form-group">
+                                <label for="game-name" data-i18n="label_game_name">🎮 遊戲名稱</label>
+                                <input type="text" id="game-name" data-i18n-placeholder="ph_game_name"
+                                    placeholder="遊戲名稱 (選填)" list="game-name-list">
+                                <datalist id="game-name-list"></datalist>
+                            </div>
+                            <div class="form-group">
+                                <label for="notes" data-i18n="label_notes">💬 備註</label>
+                                <input type="text" id="notes" data-i18n-placeholder="ph_optional" placeholder="選填">
+                            </div>
+
+                            <!-- 自訂欄位區域（在 form-grid 內，佔滿整行） -->
+                            <div id="custom-fields-container" class="custom-fields-container" style="grid-column: 1 / -1;"></div>
+                        </div>
+
+                        <!-- 按鈕區 -->
+                        <div class="form-actions">
+                            <button type="button" id="add-custom-field-btn" class="btn btn-secondary"
+                                data-i18n="btn_add_custom_field">
+                                ➕ 新增自訂欄位
+                            </button>
+                            <div class="action-buttons">
+                                <button type="button" id="clear-form-btn" class="btn btn-ghost"
+                                    data-i18n="btn_clear">清除</button>
+                                <button type="submit" class="btn btn-primary" data-i18n="btn_save">儲存紀錄</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- 對戰紀錄表格 -->
+                <div class="card table-card" id="table-card-main">
+                    <div class="card-header">
+                        <h2 data-i18n="header_record_table">📋 對戰紀錄表格</h2>
+                        <div class="table-actions">
+                            <button class="popout-btn btn btn-ghost btn-sm" data-popout-target="table-card-main"
+                                data-tooltip="在彈出視窗中開啟" onclick="PopoutManager.toggle('table-card-main')">🗗</button>
+                            <button id="delete-selected-btn" class="btn btn-danger btn-sm" style="display: none;"
+                                data-i18n="btn_delete_selected">🗑️ 刪除選取項目</button>
+                            <button id="btn-select-page" class="btn btn-secondary btn-sm" style="display: none;"
+                                onclick="TableManager.selectCurrentPage()" data-i18n="btn_select_page">✅ 選取當頁</button>
+                            <button id="btn-bulk-mode" class="btn btn-secondary btn-sm"
+                                onclick="TableManager.toggleBulkMode()" data-i18n="btn_bulk_delete_mode">🗑️
+                                批次刪除模式</button>
+                            <button id="column-settings-btn" class="btn btn-secondary btn-sm">⚙️ <span
+                                    data-i18n="btn_column_settings">欄位設定</span></button>
+                            <button id="toggle-misplay-notes-btn" class="btn btn-secondary btn-sm"
+                                onclick="TableManager.toggleMisplayNotes()" data-i18n="btn_show_misplay_notes">📝
+                                顯示渣操備註</button>
+
+                            <div class="dropdown">
+                                <button id="data-management-btn" class="btn btn-secondary btn-sm dropdown-toggle"
+                                    data-i18n="btn_data_management">💾 資料管理</button>
+                                <div id="data-dropdown-menu" class="dropdown-content">
+                                    <button id="export-json-btn" class="dropdown-item" data-i18n="btn_export_json">📥 匯出
+                                        JSON</button>
+                                    <button id="export-csv-btn" class="dropdown-item" data-i18n="btn_export_csv">📥 匯出
+                                        CSV</button>
+                                    <label class="dropdown-item import-btn">
+                                        <span data-i18n="btn_import">📤 匯入資料</span>
+                                        <input type="file" id="import-file" accept=".json,.csv" hidden>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table id="records-table">
+                            <thead>
+                                <tr id="table-header-row">
+                                    <th data-i18n="th_date">日期</th>
+                                    <th data-i18n="th_my_deck">己方牌組</th>
+                                    <th data-i18n="th_opponent_deck">對手牌組</th>
+                                    <th data-i18n="th_turn">先後手</th>
+                                    <th data-i18n="th_result">勝負</th>
+                                    <th data-i18n="th_score">分數</th>
+                                    <th data-i18n="th_game_name">遊戲名稱</th>
+                                    <th data-i18n="th_misplay">渣操</th>
+                                    <th data-i18n="th_notes">備註</th>
+                                    <th class="actions-col" data-i18n="th_actions">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="records-tbody"></tbody>
+                        </table>
+                    </div>
+                    <div id="no-records" class="no-records">
+                        <span class="no-records-icon">📭</span>
+                        <p data-i18n="no_records">尚無對戰紀錄，開始新增您的第一筆紀錄吧！</p>
+                    </div>
+
+                    <!-- 分頁控制 -->
+                    <div id="pagination-controls" class="pagination-controls hidden">
+                        <button id="page-first" class="btn btn-sm" data-i18n-title="tooltip_page_first">⏮️</button>
+                        <button id="page-prev-5" class="btn btn-sm" data-i18n-title="tooltip_page_prev_5">⏪</button>
+                        <button id="page-prev" class="btn btn-sm" data-i18n-title="tooltip_page_prev">◀️</button>
+
+                        <span id="page-info">1 / 1</span>
+
+                        <button id="page-next" class="btn btn-sm" data-i18n-title="tooltip_page_next">▶️</button>
+                        <button id="page-next-5" class="btn btn-sm" data-i18n-title="tooltip_page_next_5">⏩</button>
+                        <button id="page-last" class="btn btn-sm" data-i18n-title="tooltip_page_last">⏭️</button>
+
+                        <div class="page-jump">
+                            <span data-i18n="label_go_to_page">Go to page</span>
+                            <input type="number" id="page-jump-input" min="1" step="1">
+                            <button id="page-jump-btn" class="btn btn-sm btn-primary">✔</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 搜尋統計頁面 -->
+            <section id="search-page" class="page">
+                <!-- 搜尋條件 -->
+                <div class="card search-card" id="search-card">
+                    <div class="card-header">
+                        <h2 data-i18n="header_search_filters">🔎 搜尋條件</h2>
+                        <button class="popout-btn btn btn-ghost btn-sm" data-popout-target="search-card"
+                            data-tooltip="在彈出視窗中開啟" onclick="PopoutManager.toggle('search-card')">🗗</button>
+                    </div>
+                    <div class="search-form">
+                        <div class="search-grid">
+                            <div class="form-group">
+                                <label for="search-date-start" data-i18n="label_start_date">📅 開始日期</label>
+                                <input type="date" id="search-date-start">
+                            </div>
+                            <div class="form-group">
+                                <label for="search-date-end" data-i18n="label_end_date">📅 結束日期</label>
+                                <input type="date" id="search-date-end">
+                            </div>
+                            <div class="form-group">
+                                <label data-i18n="label_my_deck">🎴 己方牌組</label>
+                                <div class="multi-select" id="search-my-deck-container"></div>
+                            </div>
+                            <div class="form-group">
+                                <label data-i18n="label_opponent_deck">🎴 對手牌組</label>
+                                <div class="multi-select" id="search-opponent-deck-container"></div>
+                            </div>
+                            <div class="form-group">
+                                <label for="search-game-name" data-i18n="label_game_name">🎮 遊戲名稱</label>
+                                <select id="search-game-name">
+                                    <option value="" data-i18n="opt_all">全部</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="search-keyword" data-i18n="label_keyword">🔍 關鍵字搜尋</label>
+                                <input type="text" id="search-keyword" data-i18n-placeholder="ph_keyword_search"
+                                    placeholder="搜尋備註關鍵字">
+                            </div>
+                        </div>
+                        <!-- 先後手 / 勝負 按鈕組獨立一行 -->
+                        <div class="search-btn-groups">
+                            <div class="form-group">
+                                <label data-i18n="label_turn_order">🔄 先後手</label>
+                                <div class="btn-group" id="search-turn-order-group">
+                                    <button type="button" class="btn-group-item active" data-value="" data-i18n="opt_all">全部</button>
+                                    <button type="button" class="btn-group-item" data-value="先手" data-i18n="opt_first">先手</button>
+                                    <button type="button" class="btn-group-item" data-value="後手" data-i18n="opt_second">後手</button>
+                                    <button type="button" class="btn-group-item" data-value="被讓先" data-i18n="opt_granted_first">被讓先</button>
+                                </div>
+                                <input type="hidden" id="search-turn-order" value="">
+                            </div>
+                            <div class="form-group">
+                                <label data-i18n="label_result">🏆 勝負</label>
+                                <div class="btn-group" id="search-result-group">
+                                    <button type="button" class="btn-group-item active" data-value="" data-i18n="opt_all">全部</button>
+                                    <button type="button" class="btn-group-item" data-value="勝利" data-i18n="opt_win">勝利</button>
+                                    <button type="button" class="btn-group-item" data-value="敗北" data-i18n="opt_lose">敗北</button>
+                                    <button type="button" class="btn-group-item" data-value="平手" data-i18n="opt_draw">平手</button>
+                                </div>
+                                <input type="hidden" id="search-result" value="">
+                            </div>
+                        </div>
+                        <!-- 自訂欄位搜尋 -->
+                        <div id="custom-search-fields" class="custom-search-fields"></div>
+
+                        <!-- 排除選項區塊 -->
+                        <div class="exclusion-section">
+                            <button type="button" id="toggle-exclusions-btn" class="btn btn-ghost exclusion-toggle">
+                                <span data-i18n="btn_toggle_exclusions">🚫 搜尋範圍排除</span>
+                                <span class="exclusion-toggle-icon">▼</span>
+                            </button>
+                            <div id="exclusion-options" class="exclusion-options collapsed">
+                                <div class="search-grid">
+                                    <!-- 排除對戰日期 -->
+                                    <div class="form-group">
+                                        <label data-i18n="label_exclude_dates">🚫 排除對戰日期</label>
+                                        <div class="multi-select" id="exclude-dates-container"></div>
+                                    </div>
+                                    <!-- 排除己方牌組 -->
+                                    <div class="form-group">
+                                        <label data-i18n="label_exclude_my_decks">🚫 排除己方牌組</label>
+                                        <div class="multi-select" id="exclude-my-decks-container"></div>
+                                    </div>
+                                    <!-- 排除對手牌組 -->
+                                    <div class="form-group">
+                                        <label data-i18n="label_exclude_opponent_decks">🚫 排除對手牌組</label>
+                                        <div class="multi-select" id="exclude-opponent-decks-container"></div>
+                                    </div>
+                                    <!-- 排除渣操程度 -->
+                                    <div class="form-group">
+                                        <label data-i18n="label_exclude_misplay">🚫 排除渣操程度</label>
+                                        <div class="multi-select" id="exclude-misplay-container"></div>
+                                    </div>
+                                    <!-- 排除先後手 -->
+                                    <div class="form-group">
+                                        <label data-i18n="label_exclude_turn_order">🚫 排除先後手</label>
+                                        <div class="btn-group-multi" id="exclude-turn-order-container">
+                                            <button type="button" class="btn-group-item" data-value="先手" data-i18n="opt_first">先手</button>
+                                            <button type="button" class="btn-group-item" data-value="後手" data-i18n="opt_second">後手</button>
+                                            <button type="button" class="btn-group-item" data-value="被讓先" data-i18n="opt_granted_first">被讓先</button>
+                                        </div>
+                                    </div>
+                                    <!-- 排除勝負結果 -->
+                                    <div class="form-group">
+                                        <label data-i18n="label_exclude_result">🚫 排除勝負結果</label>
+                                        <div class="btn-group-multi" id="exclude-result-container">
+                                            <button type="button" class="btn-group-item" data-value="勝利" data-i18n="opt_win">勝利</button>
+                                            <button type="button" class="btn-group-item" data-value="敗北" data-i18n="opt_lose">敗北</button>
+                                            <button type="button" class="btn-group-item" data-value="平手" data-i18n="opt_draw">平手</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="search-actions">
+                            <div class="search-actions-left">
+                                <button id="toggle-charts-btn" class="btn btn-ghost"
+                                    data-i18n="btn_toggle_charts">開關圖表顯示</button>
+                                <button id="toggle-set-comparison-btn" class="btn btn-ghost"
+                                    data-i18n="btn_toggle_set_comparison">數據比較</button>
+                                <button id="toggle-matchup-overview-btn" class="btn btn-ghost"
+                                    data-i18n="btn_toggle_matchup_overview">牌組勝率總覽</button>
+                                <div class="range-slider-section">
+                                    <label class="checkbox-inline">
+                                        <input type="checkbox" id="filter-range-enabled">
+                                        <span data-i18n="label_data_range">資料範圍篩選</span>
+                                    </label>
+                                    <div id="range-slider-container" class="range-slider-container" style="display:none;">
+                                        <div class="range-slider-track">
+                                            <input type="range" id="range-slider-min" min="1" max="100" value="1" class="range-slider-input range-min">
+                                            <input type="range" id="range-slider-max" min="1" max="100" value="100" class="range-slider-input range-max">
+                                        </div>
+                                        <div id="range-slider-info" class="range-slider-info"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="search-actions-right">
+                                <label class="checkbox-inline"
+                                    style="margin-right: 1rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">
+                                    <input type="checkbox" id="calc-no-draw">
+                                    <span data-i18n="label_calc_no_draw" style="font-size: 0.9em;">排除平手計算勝率</span>
+                                </label>
+                                <button id="reset-search-btn" class="btn btn-ghost" data-i18n="btn_reset">重置</button>
+
+                                <button id="search-btn" class="btn btn-primary" data-i18n="btn_search">🔍 搜尋</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 圖表區域 -->
+                <div class="charts-grid">
+                    <div class="card chart-card" id="score-chart-card">
+                        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                            <h3 data-i18n="header_chart_trend" style="margin: 0;">📈 趨勢分析</h3>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <select id="score-chart-type-selector" class="form-control" style="width: auto; padding: 0.2rem 0.5rem; font-size: 0.9em; cursor: pointer;" onchange="if(window.ChartManager) ChartManager.setScoreChartType(this.value)">
+                                    <option value="score" data-i18n="opt_trend_score">分數變化</option>
+                                    <option value="winrate" data-i18n="opt_trend_winrate">勝率變化</option>
+                                </select>
+                                <select id="score-chart-axis-mode" class="form-control" style="width: auto; padding: 0.2rem 0.5rem; font-size: 0.9em; cursor: pointer;" onchange="if(window.ChartManager) ChartManager.setScoreChartMode(this.value)">
+                                    <option value="games" data-i18n="opt_axis_games">依場次</option>
+                                    <option value="dates" data-i18n="opt_axis_dates">依日期</option>
+                                 </select>
+                                 <span id="winrate-info-icon" class="info-icon" style="cursor: help; color: hsla(0, 0%, 100%, 0.6); font-size: 0.9em; margin-left: 4px; display: none; align-items: center;" 
+                                     data-i18n-tooltip="chart_info_tooltip"
+                                     data-tooltip="[依場次]: 每一個點代表「包含當前的前 20 場」滾動平均勝率&#10;[依日期]: 每一個點代表「該整天所有比賽」的總勝率">ℹ️</span>
+                                 <button class="popout-btn btn btn-ghost btn-sm" data-popout-target="score-chart-card"
+                                    data-tooltip="在彈出視窗中開啟" onclick="PopoutManager.toggle('score-chart-card')">🗗</button>
+                            </div>
+                        </div>
+                        <div class="chart-container" id="score-chart-container">
+                            <canvas id="score-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="card chart-card" id="deck-chart-card">
+                        <div class="card-header">
+                            <h3 data-i18n="header_deck_dist">🥧 對手牌組分布</h3>
+                            <button class="popout-btn btn btn-ghost btn-sm" data-popout-target="deck-chart-card"
+                                data-tooltip="在彈出視窗中開啟" onclick="PopoutManager.toggle('deck-chart-card')">🗗</button>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; height: 300px; padding: 10px 0; box-sizing: content-box;">
+                            <div class="chart-container" id="deck-chart-container"
+                                style="flex: 1; min-width: 0;">
+                                <canvas id="deck-chart"></canvas>
+                            </div>
+                            <div id="deck-chart-legend" class="custom-legend"
+                                style="flex: 0 0 auto; overflow-y: hidden; padding: 0.3rem; width: 200px;">
+                                <!-- 自定義圖例將由 JavaScript 渲染 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 統計摘要 -->
+                <div class="stats-grid-wrapper" id="stats-grid-wrapper">
+                    <div class="stats-grid-header">
+                        <button class="popout-btn btn btn-ghost btn-sm" data-popout-target="stats-grid-wrapper"
+                            data-i18n-tooltip="tooltip_popout"
+                            onclick="PopoutManager.toggle('stats-grid-wrapper')">🗗</button>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="card stat-card">
+                            <div class="stat-icon">📊</div>
+                            <div class="stat-content">
+                                <div class="stat-label" data-i18n="stat_total">總場次</div>
+                                <div class="stat-value" id="stat-total">0</div>
+                                <div class="stat-note" id="stat-total-note"></div>
+                            </div>
+                        </div>
+                        <div class="card stat-card">
+                            <div class="stat-icon">🏆</div>
+                            <div class="stat-content">
+                                <div class="stat-label" data-i18n="stat_win_rate">總勝率</div>
+                                <div class="stat-value" id="stat-win-rate">0%</div>
+                                <div class="stat-note" id="stat-win-rate-note"></div>
+                            </div>
+                        </div>
+                        <div class="card stat-card">
+                            <div class="stat-icon">🎯</div>
+                            <div class="stat-content">
+                                <div class="stat-label" data-i18n="stat_first_rate">先手率</div>
+                                <div class="stat-value" id="stat-first-rate">0%</div>
+                                <div class="stat-note" id="stat-first-rate-note"></div>
+                            </div>
+                        </div>
+                        <div class="card stat-card">
+                            <div class="stat-icon">⭐</div>
+                            <div class="stat-content">
+                                <div class="stat-label" data-i18n="stat_first_win_rate">先手勝率</div>
+                                <div class="stat-value" id="stat-first-win-rate">0%</div>
+                                <div class="stat-note" id="stat-first-win-rate-note"></div>
+                            </div>
+                        </div>
+                        <div class="card stat-card">
+                            <div class="stat-icon">🌙</div>
+                            <div class="stat-content">
+                                <div class="stat-label" data-i18n="stat_second_win_rate">後手勝率</div>
+                                <div class="stat-value" id="stat-second-win-rate">0%</div>
+                                <div class="stat-note" id="stat-second-win-rate-note"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 數據比較 -->
+                <div class="card set-comparison-card" id="set-comparison-card" style="display:none;">
+                    <div class="card-header">
+                        <h3 data-i18n="header_set_comparison">📊 數據比較</h3>
+                        <div style="display:flex; align-items:center; gap:0.5rem;">
+                            <label for="set-size-input" data-i18n="label_set_size" style="font-size:0.85rem;">SET 大小（場數）</label>
+                            <input type="number" id="set-size-input" min="5" max="500" value="40" style="width:70px;">
+                            <button class="popout-btn btn btn-ghost btn-sm" data-popout-target="set-comparison-card"
+                                data-i18n-tooltip="tooltip_popout"
+                                onclick="PopoutManager.toggle('set-comparison-card')">🗗</button>
+                        </div>
+                    </div>
+                    <div id="set-comparison-content"></div>
+                </div>
+
+                <!-- 牌組勝率總覽 -->
+                <div class="card matchup-overview-card" id="matchup-overview-card" style="display:none;">
+                    <div class="card-header">
+                        <h3 data-i18n="header_matchup_overview">⚔️ 牌組勝率總覽</h3>
+                        <button class="popout-btn btn btn-ghost btn-sm" data-popout-target="matchup-overview-card"
+                            data-i18n-tooltip="tooltip_popout"
+                            onclick="PopoutManager.toggle('matchup-overview-card')">🗗</button>
+                    </div>
+                    <div class="table-container">
+                        <table id="matchup-overview-table">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="th_matchup_deck">對手牌組</th>
+                                    <th data-i18n="th_matchup_games">對戰場次</th>
+                                    <th data-i18n="th_matchup_win_rate">總勝率</th>
+                                    <th data-i18n="th_matchup_first_win">先攻勝率</th>
+                                    <th data-i18n="th_matchup_second_win">後攻勝率</th>
+                                </tr>
+                            </thead>
+                            <tbody id="matchup-overview-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 搜尋結果表格 -->
+                <div class="card table-card" id="search-results-card">
+                    <div class="card-header">
+                        <div style="display: flex; align-items: center; gap: 1rem;">
+                            <h2 data-i18n="header_search_results" style="margin: 0;">📋 搜尋結果</h2>
+                            <span id="search-result-count" class="result-count">共 0 筆</span>
+                        </div>
+                        <div class="table-actions">
+                            <button class="popout-btn btn btn-ghost btn-sm" data-popout-target="search-results-card"
+                                data-tooltip="在彈出視窗中開啟"
+                                onclick="PopoutManager.toggle('search-results-card')">🗗</button>
+                            <button id="search-delete-selected-btn" class="btn btn-danger btn-sm" style="display: none;"
+                                onclick="SearchManager.deleteSelected()">
+                                <span data-i18n="btn_delete_selected">刪除選取項目</span> <span
+                                    id="search-selected-count"></span>
+                            </button>
+                            <button id="btn-search-select-page" class="btn btn-secondary btn-sm" style="display: none;"
+                                onclick="SearchManager.selectCurrentPage()" data-i18n="btn_select_page">✅ 選取當頁</button>
+                            <button id="btn-search-bulk-mode" class="btn btn-secondary btn-sm"
+                                onclick="SearchManager.toggleBulkMode()" data-i18n="btn_bulk_delete_mode">
+                                批次刪除模式</button>
+
+                            <button id="search-column-settings-btn" class="btn btn-secondary btn-sm">⚙️ <span
+                                    data-i18n="btn_column_settings">欄位設定</span></button>
+
+                            <button id="search-toggle-misplay-notes-btn" class="btn btn-secondary btn-sm"
+                                onclick="SearchManager.toggleMisplayNotes()" data-i18n="btn_show_misplay_notes">
+                                📝 顯示渣操備註</button>
+
+                            <div class="dropdown">
+                                <button id="search-data-management-btn" class="btn btn-secondary btn-sm dropdown-toggle"
+                                    data-i18n="btn_data_management">💾 資料管理</button>
+                                <div id="search-data-dropdown-menu" class="dropdown-content">
+                                    <button id="search-export-json-btn" class="dropdown-item"
+                                        data-i18n="btn_export_json">📥 匯出 JSON</button>
+                                    <button id="search-export-csv-btn" class="dropdown-item"
+                                        data-i18n="btn_export_csv">📥 匯出 CSV</button>
+                                    <label class="dropdown-item import-btn">
+                                        <span data-i18n="btn_import">📤 匯入資料</span>
+                                        <input type="file" id="search-import-file" accept=".json,.csv" hidden>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table id="search-results-table">
+                            <thead>
+                                <tr id="search-table-header-row">
+                                    <th data-i18n="th_date">日期</th>
+                                    <th data-i18n="th_my_deck">己方牌組</th>
+                                    <th data-i18n="th_opponent_deck">對手牌組</th>
+                                    <th data-i18n="th_turn">先後手</th>
+                                    <th data-i18n="th_result">勝負</th>
+                                    <th data-i18n="th_score">分數</th>
+                                    <th data-i18n="th_game_name">遊戲名稱</th>
+                                    <th data-i18n="th_misplay">渣操</th>
+                                    <th data-i18n="th_notes">備註</th>
+                                </tr>
+                            </thead>
+                            <tbody id="search-results-tbody"></tbody>
+                        </table>
+                    </div>
+                    <!-- 搜尋結果分頁控制 -->
+                    <div id="search-pagination-controls" class="pagination-controls hidden">
+                        <button id="search-page-first" class="btn btn-sm"
+                            data-i18n-title="tooltip_page_first">⏮️</button>
+                        <button id="search-page-prev-5" class="btn btn-sm"
+                            data-i18n-title="tooltip_page_prev_5">⏪</button>
+                        <button id="search-page-prev" class="btn btn-sm" data-i18n-title="tooltip_page_prev">◀️</button>
+
+                        <span id="search-page-info">1 / 1</span>
+
+                        <button id="search-page-next" class="btn btn-sm" data-i18n-title="tooltip_page_next">▶️</button>
+                        <button id="search-page-next-5" class="btn btn-sm"
+                            data-i18n-title="tooltip_page_next_5">⏩</button>
+                        <button id="search-page-last" class="btn btn-sm" data-i18n-title="tooltip_page_last">⏭️</button>
+
+                        <div class="page-jump">
+                            <span data-i18n="label_go_to_page">Go to page</span>
+                            <input type="number" id="search-page-jump-input" min="1" step="1">
+                            <button id="search-page-jump-btn" class="btn btn-sm btn-primary">✔</button>
+                        </div>
+                    </div>
+            </section>
+        </main>
+
+        <!-- 頁尾 -->
+        <footer class="footer">
+            <div style="display:flex; align-items:center; justify-content:center; gap:1rem; flex-wrap:wrap;">
+                <p data-i18n="footer_info" style="margin:0;">💾 資料自動儲存於本機瀏覽器</p>
+                <button id="btn-test-data" class="btn btn-ghost btn-sm" data-i18n="btn_test_data">🧪 測試資料</button>
+            </div>
+            <div class="footer-author" style="margin-top: 0.5rem; opacity: 0.6; font-size: 0.8rem;">
+                <span data-i18n="text_author">作者</span>: 帕米パミィ Pammy
+            </div>
+        </footer>
+    </div>
+
+    <!-- 新增自訂欄位對話框 -->
+    <div id="custom-field-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 data-i18n="modal_add_field_title">➕ 新增自訂欄位</h3>
+                <button class="modal-close" id="close-modal-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="custom-field-name" data-i18n="label_field_name">欄位名稱</label>
+                    <input type="text" id="custom-field-name" data-i18n-placeholder="ph_field_name" placeholder="輸入欄位名稱"
+                        required>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancel-custom-field-btn" class="btn btn-ghost" data-i18n="btn_cancel">取消</button>
+                <button id="confirm-custom-field-btn" class="btn btn-primary" data-i18n="btn_confirm">確認新增</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 編輯紀錄對話框 -->
+    <div id="edit-modal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3 data-i18n="modal_edit_title">✏️ 編輯紀錄</h3>
+                <button class="modal-close" id="close-edit-modal-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="edit-form" class="record-form">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="edit-battle-date" data-i18n="label_date">📅 對戰日期</label>
+                            <input type="date" id="edit-battle-date">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-my-deck" data-i18n="label_my_deck">🎴 己方牌組</label>
+                            <input type="text" id="edit-my-deck" data-i18n-placeholder="ph_deck_name"
+                                placeholder="輸入牌組名稱" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-opponent-deck" data-i18n="label_opponent_deck">🎴 對手牌組</label>
+                            <input type="text" id="edit-opponent-deck" data-i18n-placeholder="ph_deck_name"
+                                placeholder="輸入牌組名稱" required>
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n="label_turn_order">🔄 先後手</label>
+                            <div class="btn-group" id="edit-turn-order-group">
+                                <button type="button" class="btn-group-item" data-value="先手" data-i18n="opt_first">先手</button>
+                                <button type="button" class="btn-group-item" data-value="後手" data-i18n="opt_second">後手</button>
+                                <button type="button" class="btn-group-item" data-value="被讓先" data-i18n="opt_granted_first">被讓先</button>
+                            </div>
+                            <input type="hidden" id="edit-turn-order" value="">
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n="label_result">🏆 勝負</label>
+                            <div class="btn-group" id="edit-result-group">
+                                <button type="button" class="btn-group-item" data-value="勝利" data-i18n="opt_win">勝利</button>
+                                <button type="button" class="btn-group-item" data-value="敗北" data-i18n="opt_lose">敗北</button>
+                                <button type="button" class="btn-group-item" data-value="平手" data-i18n="opt_draw">平手</button>
+                            </div>
+                            <input type="hidden" id="edit-result" value="">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-score" data-i18n="label_score">📊 當前分數</label>
+                            <input type="number" id="edit-score" data-i18n-placeholder="ph_score" placeholder="輸入分數">
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n="label_misplay">⚠️ 渣操等級</label>
+                            <div class="btn-group" id="edit-misplay-group">
+                                <button type="button" class="btn-group-item active" data-value="" data-i18n="opt_not_selected">未選擇</button>
+                                <button type="button" class="btn-group-item" data-value="無" data-i18n="opt_none">無</button>
+                                <button type="button" class="btn-group-item" data-value="輕度" data-i18n="opt_light">輕度</button>
+                                <button type="button" class="btn-group-item" data-value="中等" data-i18n="opt_medium">中等</button>
+                                <button type="button" class="btn-group-item" data-value="嚴重" data-i18n="opt_severe">嚴重</button>
+                            </div>
+                            <input type="hidden" id="edit-misplay" value="">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-misplay-note" data-i18n="label_misplay_note">📝 渣操備註</label>
+                            <input type="text" id="edit-misplay-note" data-i18n-placeholder="ph_optional"
+                                placeholder="選填">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-game-name" data-i18n="label_game_name">🎮 遊戲名稱</label>
+                            <input type="text" id="edit-game-name" data-i18n-placeholder="ph_game_name"
+                                placeholder="遊戲名稱 (選填)">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-notes" data-i18n="label_notes">💬 備註</label>
+                            <input type="text" id="edit-notes" data-i18n-placeholder="ph_optional" placeholder="選填">
+                        </div>
+                    </div>
+                    <div id="edit-custom-fields-container" class="custom-fields-container"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button id="cancel-edit-btn" class="btn btn-ghost" data-i18n="btn_cancel">取消</button>
+                <button id="confirm-edit-btn" class="btn btn-primary" data-i18n="btn_save_changes">儲存變更</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 匯入選擇 Modal -->
+    <div id="import-choice-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 data-i18n="modal_import_title">匯入選項</h3>
+                <button class="modal-close" id="close-import-modal-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p data-i18n="modal_import_desc">請選擇匯入模式：</p>
+                <div class="import-options">
+                    <button id="import-append-btn" class="btn btn-primary import-option-btn">
+                        <span class="icon">➕</span>
+                        <div class="text">
+                            <span class="title" data-i18n="btn_import_append">加入現有資料</span>
+                            <span class="desc" data-i18n="desc_import_append">保留目前紀錄，新增匯入的資料</span>
+                        </div>
+                    </button>
+                    <button id="import-replace-btn" class="btn btn-danger import-option-btn">
+                        <span class="icon">📂</span>
+                        <div class="text">
+                            <span class="title" data-i18n="btn_import_replace">開啟選擇資料</span>
+                            <span class="desc" data-i18n="desc_import_replace">清空目前紀錄，僅載入匯入的資料</span>
+                        </div>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancel-import-btn" class="btn btn-ghost" data-i18n="btn_cancel">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 刪除確認對話框 -->
+    <div id="delete-modal" class="modal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h3 data-i18n="modal_delete_title">⚠️ 確認刪除</h3>
+                <button class="modal-close" id="close-delete-modal-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p data-i18n="modal_delete_confirm">確定要刪除此筆對戰紀錄嗎？此操作無法復原。</p>
+            </div>
+            <div class="modal-footer">
+                <button id="cancel-delete-btn" class="btn btn-ghost" data-i18n="btn_cancel">取消</button>
+                <button id="confirm-delete-btn" class="btn btn-danger" data-i18n="btn_confirm_delete">確認刪除</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 欄位設定對話框 -->
+    <div id="column-settings-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 data-i18n="modal_column_settings_title">⚙️ 欄位顯示設定</h3>
+                <button class="modal-close" id="close-column-modal-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="row-height-settings">
+                    <label data-i18n="label_row_height">💡 表格行距</label>
+                    <div class="row-height-options" id="row-height-options">
+                        <button class="btn btn-ghost" data-height="ultra-slim" data-i18n="opt_row_ultra_slim">非常緊湊</button>
+                        <button class="btn btn-ghost active" data-height="slim" data-i18n="opt_row_slim">緊湊</button>
+                        <button class="btn btn-ghost" data-height="normal" data-i18n="opt_row_normal">標準</button>
+                        <button class="btn btn-ghost" data-height="spacious" data-i18n="opt_row_spacious">寬鬆</button>
+                    </div>
+                </div>
+                <div id="column-toggles-container" class="column-toggles-grid">
+                    <!-- 動態產生勾選框 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="reset-columns-btn" class="btn btn-ghost" data-i18n="btn_reset_default">恢復預設</button>
+                <button id="confirm-columns-btn" class="btn btn-primary" data-i18n="btn_confirm">確認</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 通知 -->
+    <div id="toast-container" class="toast-container"></div>
+
+    </div><!-- /app-container -->
+
+    <!-- JavaScript 模組 -->
+    <script src="modules/i18n.js"></script>
+    <script src="modules/dataManager.js"></script>
+    <script src="modules/tableManager.js"></script>
+    <script src="modules/chartManager.js"></script>
+    <script src="modules/searchManager.js"></script>
+    <script src="modules/syncManager.js"></script>
+    <script src="modules/popoutManager.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
