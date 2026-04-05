@@ -1,0 +1,2517 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎴 彈出視窗</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        /* 彈出頁面專用樣式 */
+        body {
+            padding: 0;
+            margin: 0;
+        }
+
+        .popout-page {
+            min-height: 100vh;
+            padding: var(--spacing-md);
+        }
+
+        .popout-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--spacing-md) var(--spacing-lg);
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: var(--spacing-lg);
+            border-radius: var(--radius-lg);
+        }
+
+        .popout-header h1 {
+            margin: 0;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+
+        .sync-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            padding: var(--spacing-xs) var(--spacing-sm);
+            background: var(--success-glow);
+            color: var(--success);
+            border-radius: var(--radius-sm);
+            font-size: 0.8rem;
+        }
+
+        .sync-indicator.syncing {
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .popout-content {
+            min-height: 50vh;
+        }
+
+        /* 內容區域卡片樣式調整 */
+        .popout-content .card {
+            margin-bottom: 0;
+        }
+
+        .popout-content .chart-card {
+            height: auto;
+        }
+
+        .popout-content .chart-container {
+            height: 500px;
+        }
+
+        .popout-content .table-container {
+            max-height: 70vh;
+            overflow: auto;
+        }
+
+        .popout-content .stats-grid {
+            margin-bottom: 0;
+        }
+
+        /* OBS 模式 - 透明背景 */
+        body.obs-mode {
+            background: transparent !important;
+        }
+
+        body.obs-mode .popout-page {
+            background: transparent !important;
+            padding: var(--spacing-sm);
+        }
+
+        body.obs-mode .popout-header {
+            display: none !important;
+        }
+
+        body.obs-mode .card {
+            background: rgba(10, 10, 20, 0.85) !important;
+            backdrop-filter: blur(10px);
+        }
+
+        body.obs-mode .stats-grid {
+            gap: var(--spacing-sm);
+        }
+
+        body.obs-mode .stat-card {
+            padding: var(--spacing-sm);
+        }
+
+        /* OBS 精簡模式 - 只顯示關鍵數據 */
+        body.obs-compact .popout-page {
+            padding: var(--spacing-xs);
+        }
+
+        body.obs-compact .card {
+            border-radius: var(--radius-md);
+        }
+
+        body.obs-compact .table-container {
+            max-height: 50vh;
+        }
+
+        body.obs-compact th,
+        body.obs-compact td {
+            padding: var(--spacing-xs) var(--spacing-sm);
+            font-size: 0.9rem;
+        }
+
+        /* 縮小欄位設定 Modal (30% smaller) */
+        #column-settings-modal .modal-content {
+            transform: scale(0.7);
+            transform-origin: center center;
+            width: 800px;
+            /* Force wider width to fit more columns */
+            max-width: 95vw;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="popout-page">
+        <!-- 頁面標題 (OBS 模式下隱藏) -->
+        <header class="popout-header">
+            <h1 id="popout-title">載入中...</h1>
+            <div class="sync-indicator" id="sync-indicator">
+                <span>🔄</span>
+                <span data-i18n="text_synced">已同步</span>
+            </div>
+            <button id="toggle-simple-stats-btn" class="btn btn-secondary btn-sm" style="display: none;">
+                📋 <span data-i18n="btn_simple_display">簡易顯示</span>
+            </button>
+        </header>
+
+        <!-- 動態內容區 -->
+        <div class="popout-content" id="popout-content">
+            <!-- 根據 block 參數動態渲染 -->
+        </div>
+    </div>
+
+    <!-- 欄位設定 Modal -->
+    <div id="column-settings-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 data-i18n="modal_column_settings_title">欄位顯示設定</h3>
+                <button class="modal-close" id="close-column-modal-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="row-height-settings">
+                    <label data-i18n="label_row_height">行距設定</label>
+                    <div class="btn-group" id="row-height-options">
+                        <button class="btn btn-sm btn-ghost" data-height="slim" data-i18n="opt_row_slim">緊湊</button>
+                        <button class="btn btn-sm btn-ghost" data-height="normal" data-i18n="opt_row_normal">標準</button>
+                        <button class="btn btn-sm btn-ghost" data-height="spacious"
+                            data-i18n="opt_row_spacious">寬鬆</button>
+                    </div>
+                </div>
+                <hr style="margin: var(--spacing-md) 0; border: none; border-top: 1px solid var(--border-color);">
+                <div id="column-checkbox-list" class="column-toggles-grid">
+                    <!-- 動態渲染欄位勾選框 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="reset-columns-btn" class="btn btn-ghost" data-i18n="btn_reset_default"
+                    style="margin-right: auto;">恢復預設</button>
+                <button id="confirm-columns-btn" class="btn btn-primary" data-i18n="btn_save_changes">套用設定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 編輯對話框 (Modal) -->
+    <div id="edit-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 data-i18n="modal_edit_title">編輯紀錄</h3>
+                <button id="close-edit-modal-btn" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="edit-form">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="edit-battle-date" data-i18n="label_date">📅 對戰日期</label>
+                            <input type="date" id="edit-battle-date">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-my-deck" data-i18n="label_my_deck">🎴 己方牌組</label>
+                            <input type="text" id="edit-my-deck" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-opponent-deck" data-i18n="label_opponent_deck">🎴 對手牌組</label>
+                            <input type="text" id="edit-opponent-deck" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-turn-order" data-i18n="label_turn_order">🔄 先後手</label>
+                            <select id="edit-turn-order">
+                                <option value="" data-i18n="opt_not_selected">未選擇</option>
+                                <option value="先手" data-i18n="opt_first">先手</option>
+                                <option value="後手" data-i18n="opt_second">後手</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-result" data-i18n="label_result">🏆 勝負</label>
+                            <select id="edit-result">
+                                <option value="" data-i18n="opt_not_selected">未選擇</option>
+                                <option value="勝利" data-i18n="opt_win">勝利</option>
+                                <option value="敗北" data-i18n="opt_lose">敗北</option>
+                                <option value="平手" data-i18n="opt_draw">平手</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-score" data-i18n="label_score">📊 當前分數</label>
+                            <input type="number" id="edit-score">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-misplay" data-i18n="label_misplay">⚠️ 渣操等級</label>
+                            <select id="edit-misplay">
+                                <option value="" data-i18n="opt_not_selected">未選擇</option>
+                                <option value="無" data-i18n="opt_none">無</option>
+                                <option value="輕度" data-i18n="opt_light">輕度</option>
+                                <option value="中等" data-i18n="opt_medium">中等</option>
+                                <option value="嚴重" data-i18n="opt_severe">嚴重</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-misplay-note" data-i18n="label_misplay_note">📝 渣操備註</label>
+                            <input type="text" id="edit-misplay-note">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-game-name" data-i18n="label_game_name">🎮 遊戲名稱</label>
+                            <input type="text" id="edit-game-name">
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-notes" data-i18n="label_notes">💬 備註</label>
+                            <input type="text" id="edit-notes">
+                        </div>
+                    </div>
+                    <div id="edit-custom-fields-container" class="custom-fields-container"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button id="cancel-edit-btn" class="btn btn-ghost" data-i18n="btn_cancel">取消</button>
+                <button id="confirm-edit-btn" class="btn btn-primary" data-i18n="btn_save_changes">儲存變更</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 刪除確認 Modal -->
+    <div id="delete-modal" class="modal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h3 data-i18n="modal_delete_title">確認刪除</h3>
+                <button id="close-delete-modal-btn" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body" style="text-align: center; padding: 2rem;">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">⚠️</div>
+                <p data-i18n="modal_delete_confirm">確定要刪除這筆紀錄嗎？此動作無法復原。</p>
+            </div>
+            <div class="modal-footer">
+                <button id="cancel-delete-btn" class="btn btn-ghost" data-i18n="btn_cancel">取消</button>
+                <button id="confirm-delete-btn" class="btn btn-danger" data-i18n="btn_confirm_delete">確定刪除</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 匯入選擇 Modal -->
+    <div id="import-choice-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 data-i18n="modal_import_title">匯入選項</h3>
+                <button class="modal-close" id="close-import-modal-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p data-i18n="modal_import_desc">請選擇匯入模式：</p>
+                <div class="import-options">
+                    <button id="import-append-btn" class="btn btn-primary import-option-btn">
+                        <span class="icon">➕</span>
+                        <div class="text">
+                            <span class="title" data-i18n="btn_import_append">加入現有資料</span>
+                            <span class="desc" data-i18n="desc_import_append">保留目前紀錄，新增匯入的資料</span>
+                        </div>
+                    </button>
+                    <button id="import-replace-btn" class="btn btn-danger import-option-btn">
+                        <span class="icon">📂</span>
+                        <div class="text">
+                            <span class="title" data-i18n="btn_import_replace">開啟選擇資料</span>
+                            <span class="desc" data-i18n="desc_import_replace">清空目前紀錄，僅載入匯入的資料</span>
+                        </div>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancel-import-btn" class="btn btn-ghost" data-i18n="btn_cancel">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript 模組 -->
+    <script src="modules/i18n.js"></script>
+    <script src="modules/dataManager.js"></script>
+    <script src="modules/syncManager.js"></script>
+    <script src="modules/chartManager.js"></script>
+    <script src="modules/tableManager.js"></script>
+    <script src="modules/searchManager.js"></script>
+    <script>
+        /**
+         * 彈出頁面控制器
+         */
+        (function () {
+            'use strict';
+
+            // 全域錯誤捕獲，幫助偵錯
+            window.onerror = function(msg, url, line, col, error) {
+                // 忽略跨域腳本錯誤 (CDN 載入的 Chart.js 等)
+                // "Script error." with line=0, col=0 是典型的跨域錯誤，沒有實質內容
+                if (msg === 'Script error.' || (line === 0 && col === 0)) {
+                    console.warn('[Popout] Cross-origin script error (ignored):', msg);
+                    return true; // 阻止錯誤繼續傳播
+                }
+                const content = document.getElementById('popout-content');
+                if (content) {
+                    content.innerHTML = `
+                        <div class="card" style="padding: 2rem; color: var(--danger); text-align: center;">
+                            <h3>❌ JavaScript 執行錯誤</h3>
+                            <p>${msg}</p>
+                            <p style="font-size:0.8rem; color:var(--text-muted);">Line: ${line}, Col: ${col}</p>
+                        </div>
+                    `;
+                }
+                return false;
+            };
+
+            // 從 URL 取得參數
+            const params = new URLSearchParams(window.location.search);
+            const blockId = params.get('block');
+            const lang = params.get('lang') || 'zh-TW';
+            const obsMode = params.get('obs') === '1' || params.get('obs') === 'true';
+            const obsCompact = params.get('compact') === '1' || params.get('compact') === 'true';
+
+            // 區塊設定 (提升至全域作用域以供 HTML onchange 使用)
+            window.blockConfig = {
+                'form-card': {
+                    title: 'header_add_record',
+                    icon: '➕',
+                    render: renderFormCard
+                },
+                'table-card-main': {
+                    title: 'header_record_table',
+                    icon: '📋',
+                    render: renderTableCard
+                },
+                'search-card': {
+                    title: 'header_search_filters',
+                    icon: '🔎',
+                    render: renderSearchCard
+                },
+                'score-chart-card': {
+                    title: 'header_score_trend',
+                    currentMode: 'games',
+                    currentType: 'score',
+                    currentStartIndex: 1,
+                    render: renderScoreChart
+                },
+                'deck-chart-card': {
+                    title: 'header_deck_dist',
+                    icon: '🥧',
+                    render: renderDeckChart
+                },
+                'stats-grid-wrapper': {
+                    title: 'header_stats',
+                    icon: '📊',
+                    render: renderStatsGrid
+                },
+                'search-results-card': {
+                    title: 'header_search_results',
+                    icon: '📋',
+                    render: renderSearchResults
+                },
+                'set-comparison-card': {
+                    title: 'header_set_comparison',
+                    icon: '📊',
+                    render: renderSetComparisonCard
+                },
+                'matchup-overview-card': {
+                    title: 'header_matchup_overview',
+                    icon: '⚔️',
+                    render: renderMatchupOverviewCard
+                }
+            };
+
+            /**
+             * 應用表格行距設定
+             */
+            function applyRowHeight() {
+                const columnSettings = DataManager.getColumnSettings() || {};
+                const rowHeight = columnSettings.rowHeight || 'slim';
+
+                // 移除所有行距類別
+                document.body.classList.remove('row-height-slim', 'row-height-normal', 'row-height-spacious');
+
+                // 套用新的行距類別
+                switch (rowHeight) {
+                    case 'slim':
+                        document.body.classList.add('row-height-slim');
+                        document.documentElement.style.setProperty('--table-padding-y', '0.35rem');
+                        break;
+                    case 'normal':
+                        document.body.classList.add('row-height-normal');
+                        document.documentElement.style.setProperty('--table-padding-y', '0.75rem');
+                        break;
+                    case 'spacious':
+                        document.body.classList.add('row-height-spacious');
+                        document.documentElement.style.setProperty('--table-padding-y', '1.25rem');
+                        break;
+                }
+            }
+
+            /**
+             * 初始化
+             */
+            function init() {
+                // 設定 OBS 模式
+                if (obsMode) {
+                    document.body.classList.add('obs-mode');
+                }
+                if (obsCompact) {
+                    document.body.classList.add('obs-compact');
+                }
+
+                // 設定語言
+                if (lang) {
+                    localStorage.setItem('cardBattleLanguage', lang);
+                }
+                i18n.init();
+
+                // 如果 URL 指定顯示模式，設定 localStorage (優先於現有設定)
+                if (params.has('simple') && blockId === 'stats-grid-wrapper') {
+                    const isSimple = params.get('simple') === '1' || params.get('simple') === 'true';
+                    localStorage.setItem('statsDisplayMode', isSimple ? 'simple' : 'standard');
+                }
+
+                // 應用行距設定
+                applyRowHeight();
+
+                // 初始化同步
+                SyncManager.init();
+                subscribeToSync();
+
+                // 渲染區塊
+                renderBlock();
+
+                // 更新頁面標題
+                updateTitle();
+
+                // 綁定欄位設定 Modal 事件
+                bindColumnSettingsEvents();
+            }
+
+            /**
+             * 綁定欄位設定 Modal 事件
+             */
+            function bindColumnSettingsEvents() {
+                const closeBtn = document.getElementById('close-column-modal-btn');
+                if (closeBtn) {
+                    closeBtn.addEventListener('click', () => {
+                        const modal = document.getElementById('column-settings-modal');
+                        if (modal) modal.classList.remove('active');
+                    });
+                }
+
+                const confirmBtn = document.getElementById('confirm-columns-btn');
+                if (confirmBtn) {
+                    confirmBtn.addEventListener('click', () => {
+                        if (typeof TableManager !== 'undefined' && TableManager.saveColumnSettings) {
+                            TableManager.saveColumnSettings();
+                        }
+                    });
+                }
+
+                const resetBtn = document.getElementById('reset-columns-btn');
+                if (resetBtn) {
+                    resetBtn.addEventListener('click', () => {
+                        if (typeof TableManager !== 'undefined' && TableManager.resetColumnSettings) {
+                            TableManager.resetColumnSettings();
+                        }
+                    });
+                }
+
+                // 行距設定按鈕
+                const rowHeightBtns = document.querySelectorAll('#row-height-options .btn');
+                rowHeightBtns.forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const height = btn.dataset.height;
+                        // 更新 UI 選取狀態
+                        rowHeightBtns.forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                    });
+                });
+
+                // 點擊 Modal 外部關閉
+                window.addEventListener('click', (e) => {
+                    const modal = document.getElementById('column-settings-modal');
+                    if (e.target === modal) {
+                        modal.classList.remove('active');
+                    }
+                });
+            }
+
+            /**
+             * 更新頁面標題
+             */
+            function updateTitle() {
+                const config = window.blockConfig[blockId];
+                if (config && config.title) {
+                    document.getElementById('popout-title').textContent = i18n.get(config.title) || '趨勢分析';
+                    document.title = `🎴 ${i18n.get(config.title) || '趨勢分析'}`;
+                } else {
+                    document.getElementById('popout-title').textContent = '趨勢分析';
+                    document.title = '🎴 趨勢分析';
+                }
+
+                // 更新簡易顯示按鈕顯示狀態
+                updateSimpleStatsButton(blockId);
+            }
+
+            /**
+             * 訂閱同步事件
+             */
+            function subscribeToSync() {
+                SyncManager.subscribe((message) => {
+                    const indicator = document.getElementById('sync-indicator');
+                    indicator.classList.add('syncing');
+
+                    switch (message.type) {
+                        case SyncManager.EventTypes.RECORD_ADDED:
+                        case SyncManager.EventTypes.RECORD_UPDATED:
+                        case SyncManager.EventTypes.RECORD_DELETED:
+                        case SyncManager.EventTypes.RECORDS_IMPORTED:
+                        case SyncManager.EventTypes.FULL_SYNC:
+                            renderBlock(message.data?.records);
+                            break;
+
+                        case SyncManager.EventTypes.SEARCH_FILTERS_CHANGED:
+                            // 主頁面搜尋條件變更 - 根據彈出視窗類型更新
+                            handleSearchFiltersChanged(message.data);
+                            break;
+
+                        case SyncManager.EventTypes.SETTINGS_CHANGED:
+                            // 應用設定 (包含行距、備註顯示、批次模式、欄位設定)
+                            applyRowHeight();
+
+                            // 對於搜尋結果視窗，只重新渲染表格內容而非整個區塊
+                            if (blockId === 'search-results-card') {
+                                // 同步渣操備註顯示狀態
+                                if (message.data && message.data.isMisplayNotesVisible !== undefined) {
+                                    isPopoutMisplayNotesVisible = message.data.isMisplayNotesVisible;
+                                    const btn = document.getElementById('search-toggle-misplay-notes-btn');
+                                    if (btn) {
+                                        btn.textContent = isPopoutMisplayNotesVisible ?
+                                            (i18n.get('btn_hide_misplay_notes') || '隱藏渣操備註') :
+                                            (i18n.get('btn_show_misplay_notes') || '顯示渣操備註');
+                                    }
+                                }
+
+                                // 重新渲染表格（使用 localStorage 中的過濾結果）
+                                let searchResults = [];
+                                try {
+                                    const stored = localStorage.getItem('cardBattleSearchResults');
+                                    if (stored) {
+                                        searchResults = JSON.parse(stored);
+                                    }
+                                } catch (e) {
+                                    console.error('Failed to load search results:', e);
+                                }
+                                renderSearchResultsTable(searchResults);
+                            } else {
+                                renderBlock();
+                            }
+                            break;
+
+
+                        case SyncManager.EventTypes.LANGUAGE_CHANGED:
+                            i18n.setLang(message.data.lang);
+                            updateTitle();
+                            renderBlock();
+                            break;
+                    }
+
+
+                    setTimeout(() => {
+                        indicator.classList.remove('syncing');
+                    }, 500);
+                });
+
+                // 請求初始同步
+                SyncManager.requestFullSync();
+            }
+
+            /**
+             * 處理搜尋條件變更事件
+             */
+            function handleSearchFiltersChanged(data = {}) {
+                const startIndex = data.startIndex || (window.DataManager ? window.DataManager.getChartStartIndex() : 1);
+                // 保存到持久化儲存
+                if (window.DataManager && window.DataManager.saveChartStartIndex) {
+                    window.DataManager.saveChartStartIndex(startIndex);
+                }
+                // 保存到配置中，以便手動切換圖表模式時使用
+                if (!window.blockConfig['score-chart-card']) window.blockConfig['score-chart-card'] = {};
+                window.blockConfig['score-chart-card'].currentStartIndex = startIndex;
+                
+                // 如果是搜尋結果視窗，執行搜尋過濾
+                if (blockId === 'search-results-card') {
+                    renderSearchResults();
+                } else {
+                    // 其他依賴搜尋結果的視窗 (統計、圖表)
+                    let searchResults = [];
+                    try {
+                        const stored = localStorage.getItem('cardBattleSearchResults');
+                        if (stored) {
+                            searchResults = JSON.parse(stored);
+                        }
+                    } catch (e) {
+                        console.error('無法讀取搜尋結果:', e);
+                        return;
+                    }
+
+                    switch (blockId) {
+                        case 'stats-grid-wrapper':
+                            renderStatsGrid(searchResults);
+                            break;
+                        case 'score-chart-card':
+                            renderScoreChart(searchResults, window.blockConfig['score-chart-card']?.currentMode || 'games', window.blockConfig['score-chart-card']?.currentType || 'score', startIndex);
+                            break;
+                        case 'deck-chart-card':
+                            renderDeckChart(searchResults);
+                            break;
+                        case 'set-comparison-card':
+                            renderSetComparisonCard(searchResults);
+                            break;
+                        case 'matchup-overview-card':
+                            renderMatchupOverviewCard(searchResults);
+                            break;
+                    }
+                }
+            }
+
+
+            /**
+             * 渲染區塊
+             * @param {Array} providedRecords - 外部提供的紀錄列表（用於同步）
+             */
+            function renderBlock(providedRecords = null) {
+                const config = window.blockConfig[blockId];
+                if (!config) {
+                    document.getElementById('popout-content').innerHTML = `
+                        <div class="card" style="padding: 2rem; text-align: center;">
+                            <p>❌ 找不到區塊: ${blockId}</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // 在渲染前先獲取正確的 startIndex (針對趨勢圖)
+                let startIndex = 1;
+                if (window.DataManager && window.DataManager.getChartStartIndex) {
+                    startIndex = window.DataManager.getChartStartIndex();
+                }
+                if (window.blockConfig['score-chart-card']) {
+                    window.blockConfig['score-chart-card'].currentStartIndex = startIndex;
+                }
+
+                
+                try {
+                    config.render(providedRecords);
+                } catch (error) {
+                    console.error('[Popout] Render Error:', error);
+                    document.getElementById('popout-content').innerHTML = `
+                        <div class="card" style="padding: 2rem; text-align: center;">
+                            <p>❌ 渲染發生錯誤: ${error.message}</p>
+                            <p style="font-size: 0.8rem; color: var(--text-muted);">${error.stack}</p>
+                        </div>
+                    `;
+                }
+            }
+
+            /**
+             * 渲染：新增紀錄表單
+             */
+            function renderFormCard() {
+                document.getElementById('popout-content').innerHTML = `
+                    <div class="card">
+                        <form id="popout-record-form" class="record-form" style="padding: var(--spacing-lg);">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label>${i18n.get('label_date')}</label>
+                                    <input type="date" id="popout-battle-date" value="${new Date().toISOString().split('T')[0]}">
+                                </div>
+                                <div class="form-group">
+                                    <label>${i18n.get('label_my_deck')}</label>
+                                    <input type="text" id="popout-my-deck" placeholder="${i18n.get('ph_deck_name')}" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>${i18n.get('label_opponent_deck')}</label>
+                                    <input type="text" id="popout-opponent-deck" placeholder="${i18n.get('ph_deck_name')}" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>${i18n.get('label_turn_order')}</label>
+                                    <select id="popout-turn-order">
+                                        <option value="">${i18n.get('opt_not_selected')}</option>
+                                        <option value="先手">${i18n.get('opt_first')}</option>
+                                        <option value="後手">${i18n.get('opt_second')}</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>${i18n.get('label_result')}</label>
+                                    <select id="popout-result">
+                                        <option value="">${i18n.get('opt_not_selected')}</option>
+                                        <option value="勝利">${i18n.get('opt_win')}</option>
+                                        <option value="敗北">${i18n.get('opt_lose')}</option>
+                                        <option value="平手">${i18n.get('opt_draw')}</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>${i18n.get('label_score')}</label>
+                                    <input type="number" id="popout-score" placeholder="${i18n.get('ph_score')}">
+                                </div>
+                                <div class="form-group">
+                                    <label>${i18n.get('label_misplay')}</label>
+                                    <select id="popout-misplay">
+                                        <option value="">${i18n.get('opt_not_selected')}</option>
+                                        <option value="無">${i18n.get('opt_none')}</option>
+                                        <option value="輕度">${i18n.get('opt_light')}</option>
+                                        <option value="中等">${i18n.get('opt_medium')}</option>
+                                        <option value="嚴重">${i18n.get('opt_severe')}</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>${i18n.get('label_misplay_note')}</label>
+                                    <input type="text" id="popout-misplay-note" placeholder="${i18n.get('ph_optional')}">
+                                </div>
+                                <div class="form-group">
+                                    <label>${i18n.get('label_game_name')}</label>
+                                    <input type="text" id="popout-game-name" placeholder="${i18n.get('ph_game_name')}">
+                                </div>
+                                <div class="form-group">
+                                    <label>${i18n.get('label_notes')}</label>
+                                    <input type="text" id="popout-notes" placeholder="${i18n.get('ph_optional')}">
+                                </div>
+                            </div>
+                            <div class="form-actions" style="margin: var(--sp-4) calc(-1 * var(--spacing-lg)) 0; border-radius: 0 0 var(--radius-lg) var(--radius-lg);">
+                                <div></div>
+                                <div class="action-buttons">
+                                    <button type="button" class="btn btn-ghost" onclick="document.getElementById('popout-record-form').reset()">${i18n.get('btn_clear')}</button>
+                                    <button type="submit" class="btn btn-primary">${i18n.get('btn_save')}</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                `;
+
+                document.getElementById('popout-record-form').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    saveRecord();
+                });
+
+                // 綁定渣操備註邏輯
+                const misplaySelect = document.getElementById('popout-misplay');
+                if (misplaySelect) {
+                    misplaySelect.addEventListener('change', updatePopoutMisplayState);
+                }
+                updatePopoutMisplayState(); // 初始狀態檢查
+
+                // 綁定行距按鈕 (Safeguard)
+                const rowHeightBtns = document.querySelectorAll('#row-height-options .btn');
+                rowHeightBtns.forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        rowHeightBtns.forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                    });
+                });
+
+                // Set initial active state for row height
+                const currentSettings = DataManager.getColumnSettings() || {};
+                const currentHeight = currentSettings.rowHeight || 'slim';
+                const activeBtn = document.querySelector(`#row-height-options .btn[data-height="${currentHeight}"]`);
+                if (activeBtn) activeBtn.classList.add('active');
+            }
+
+            /**
+             * 更新彈出視窗渣操備註狀態
+             */
+            function updatePopoutMisplayState() {
+                const select = document.getElementById('popout-misplay');
+                const noteInput = document.getElementById('popout-misplay-note');
+                if (!select || !noteInput) return;
+
+                const val = select.value;
+                const isDisabled = !val || val === '' || val === '無';
+
+                noteInput.disabled = isDisabled;
+                if (isDisabled) {
+                    noteInput.value = '';
+                    noteInput.placeholder = i18n.get('ph_optional') || '選填';
+                    noteInput.parentElement.classList.add('disabled-input');
+                } else {
+                    noteInput.parentElement.classList.remove('disabled-input');
+                }
+            }
+
+            /**
+             * 儲存紀錄
+             */
+            function saveRecord() {
+                const record = {
+                    id: Date.now().toString(),
+                    date: formatDateForStorage(document.getElementById('popout-battle-date').value),
+                    myDeck: document.getElementById('popout-my-deck').value.trim(),
+                    opponentDeck: document.getElementById('popout-opponent-deck').value.trim(),
+                    turnOrder: document.getElementById('popout-turn-order').value,
+                    result: document.getElementById('popout-result').value,
+                    score: document.getElementById('popout-score').value,
+                    misplay: document.getElementById('popout-misplay').value,
+                    misplayNote: document.getElementById('popout-misplay-note').value.trim(),
+                    gameName: document.getElementById('popout-game-name').value.trim(),
+                    notes: document.getElementById('popout-notes').value.trim(),
+                    customFields: {}
+                };
+
+                DataManager.addRecord(record);
+                SyncManager.broadcast(SyncManager.EventTypes.RECORD_ADDED, { record });
+
+                document.getElementById('popout-record-form').reset();
+                document.getElementById('popout-battle-date').value = new Date().toISOString().split('T')[0];
+
+                alert(i18n.get('toast_save_success'));
+            }
+
+            function formatDateForStorage(dateStr) {
+                if (!dateStr) return '';
+                return dateStr.replace(/-/g, '/');
+            }
+
+            /**
+             * 渲染：對戰紀錄表格
+             */
+            function renderTableCard(providedRecords = null) {
+                // 初始化 TableManager
+                TableManager.init();
+
+                document.getElementById('popout-content').innerHTML = `
+                    <div class="card">
+                        <div class="card-header" style="padding: var(--spacing-md) var(--spacing-lg); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--spacing-md);">
+                            <div style="display: flex; gap: var(--spacing-sm); align-items: center;">
+                                <button id="column-settings-btn" class="btn btn-sm btn-outline" data-i18n="btn_column_settings">欄位設定</button>
+                                <button id="toggle-misplay-notes-btn" class="btn btn-sm btn-outline" data-i18n="btn_show_misplay_notes">顯示渣操備註</button>
+                            </div>
+                        </div>
+
+                        <div class="table-container">
+                            <table id="battle-records-table">
+                                <thead>
+                                    <tr id="table-header-row">
+                                        <!-- 與 TableManager.renderTable() 連動 -->
+                                    </tr>
+                                </thead>
+                                <tbody id="records-tbody">
+                                    <!-- 與 TableManager.renderTable() 連動 -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div id="pagination-controls" class="pagination-controls">
+                            <button id="page-first" class="btn btn-sm">⏮️</button>
+                            <button id="page-prev-5" class="btn btn-sm">⏪</button>
+                            <button id="page-prev" class="btn btn-sm">◀️</button>
+                            <span id="page-info">1 / 1</span>
+                            <button id="page-next" class="btn btn-sm">▶️</button>
+                            <button id="page-next-5" class="btn btn-sm">⏩</button>
+                            <button id="page-last" class="btn btn-sm">⏭️</button>
+                        </div>
+                    </div>
+                `;
+
+                // 委託 TableManager 渲染與綁定
+                TableManager.renderTable();
+
+                // 綁定彈出視窗特有的按鈕事件 (對應 TableManager 的函數)
+                const btnColumn = document.getElementById('column-settings-btn');
+                if (btnColumn) btnColumn.addEventListener('click', () => TableManager.openColumnSettingsModal());
+
+                const btnMisplay = document.getElementById('toggle-misplay-notes-btn');
+                if (btnMisplay) btnMisplay.addEventListener('click', () => TableManager.toggleMisplayNotes());
+            }
+
+            /**
+             * 渲染：搜尋條件
+             */
+            function renderSearchCard() {
+                document.getElementById('popout-content').innerHTML = `
+                    <div class="card" style="padding: 2rem; text-align: center;">
+                        <p style="color: var(--text-secondary);">${i18n.get('popout_search_note')}</p>
+                    </div>
+                `;
+            }
+
+            /**
+             * 渲染：趨勢分析圖
+             */
+            let popoutScoreChart = null;
+            const SEGMENT_SIZE = 50;
+
+            function renderScoreChart(providedRecords = null, mode = 'games', type = 'score', startIndex = 1) {
+                const blockInfo = window.blockConfig['score-chart-card'];
+                if (blockInfo) {
+                    blockInfo.currentMode = mode;
+                    blockInfo.currentType = type;
+                    blockInfo.currentStartIndex = startIndex;
+                }
+                document.getElementById('popout-content').innerHTML = `
+                    <div class="card chart-card" style="display: flex; flex-direction: column;">
+                        <div class="card-header" style="padding: 0.5rem 1rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: flex-end; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                            <span style="font-size: 0.9em; font-weight: 500;" id="popout-chart-title">${type === 'winrate' ? (i18n.get('header_winrate_trend') || '勝率變化趨勢') : (i18n.get('header_score_trend') || '分數變化趨勢')}</span>
+                            <div style="flex: 1;"></div>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <select id="popout-score-chart-type-selector" class="form-control" style="width: auto; padding: 0.2rem 0.5rem; font-size: 0.9em; cursor: pointer;" onchange="renderScoreChart(null, document.getElementById('popout-score-chart-axis-mode').value, this.value, window.blockConfig['score-chart-card']?.currentStartIndex || 1); SyncManager.broadcast(SyncManager.EventTypes.SCORE_CHART_TYPE_CHANGED, { type: this.value });">
+                                    <option value="score" ${type === 'score' ? 'selected' : ''} data-i18n="opt_trend_score">${i18n.get('opt_trend_score') || '分數趨勢'}</option>
+                                    <option value="winrate" ${type === 'winrate' ? 'selected' : ''} data-i18n="opt_trend_winrate">${i18n.get('opt_trend_winrate') || '勝率趨勢'}</option>
+                                </select>
+                                <select id="popout-score-chart-axis-mode" class="form-control" style="width: auto; padding: 0.2rem 0.5rem; font-size: 0.9em; cursor: pointer;" onchange="renderScoreChart(null, this.value, document.getElementById('popout-score-chart-type-selector').value, window.blockConfig['score-chart-card']?.currentStartIndex || 1); SyncManager.broadcast(SyncManager.EventTypes.SCORE_CHART_MODE_CHANGED, { mode: this.value });">
+                                    <option value="games" ${mode === 'games' ? 'selected' : ''} data-i18n="opt_axis_games">${i18n.get('opt_axis_games') || '依場次'}</option>
+                                    <option value="dates" ${mode === 'dates' ? 'selected' : ''} data-i18n="opt_axis_dates">${i18n.get('opt_axis_dates') || '依日期'}</option>
+                                 </select>
+                                 <span id="popout-winrate-info-icon" class="info-icon" style="cursor: help; color: hsla(0, 0%, 100%, 0.6); font-size: 0.9em; margin-left: 4px; display: ${type === 'winrate' ? 'inline-flex' : 'none'}; align-items: center;" 
+                                     data-i18n-tooltip="chart_info_tooltip"
+                                     data-tooltip="[依場次]: 每一個點代表「包含當前的前 20 場」滾動平均勝率&#10;[依日期]: 每一個點代表「該整天所有比賽」的總勝率">ℹ️</span>
+                             </div>
+                        </div>
+                        <div class="chart-container" style="flex: 1; min-height: 600px;">
+                            <canvas id="popout-score-chart"></canvas>
+                        </div>
+                    </div>
+                `;
+
+                setTimeout(() => {
+                    // 保存 startIndex 到 window.blockConfig 以便切換模式時維持同步
+                    if (!window.blockConfig['score-chart-card']) window.blockConfig['score-chart-card'] = {};
+                    window.blockConfig['score-chart-card'].currentStartIndex = startIndex;
+
+                    let records = providedRecords;
+                    if (!records) {
+                        try {
+                            const stored = localStorage.getItem('cardBattleSearchResults');
+                            if (stored) records = JSON.parse(stored);
+                        } catch (e) { console.error('Failed to load search results:', e); }
+                        if (!records || records.length === 0) records = DataManager.getRecords();
+                    }
+
+                    let targetRecords = [];
+                    if (type === 'score') {
+                        targetRecords = records.filter(r => r.score !== '' && r.score !== null && r.score !== undefined);
+                    } else {
+                        targetRecords = records.filter(r => r.result === '勝利' || r.result === '敗北' || r.result === '平手');
+                    }
+
+                    const baseSortedRecords = [...targetRecords].sort((a, b) => {
+                        const dateA = a.date ? new Date(a.date.replace(/\//g, '-')) : new Date(a.createdAt);
+                        const dateB = b.date ? new Date(b.date.replace(/\//g, '-')) : new Date(b.createdAt);
+                        if (dateA.getTime() !== dateB.getTime()) return dateA - dateB;
+                        return a.id.localeCompare(b.id);
+                    });
+
+                    let sortedRecords;
+                    if (mode === 'dates') {
+                        const uniqueDatesMap = new Map();
+                        baseSortedRecords.forEach(r => {
+                            const fullDate = r.date || 'Unknown';
+                            const d = fullDate.substring(0, 10);
+                            uniqueDatesMap.set(d, r);
+                        });
+                        sortedRecords = Array.from(uniqueDatesMap.values());
+                    } else {
+                        sortedRecords = baseSortedRecords;
+                    }
+
+                    const labels = sortedRecords.map((r, i) => {
+                        return mode === 'dates' ? (r.date || 'Unknown') : `#${startIndex + i}`;
+                    });
+
+                    let dataPoints = [];
+                    if (type === 'score') {
+                        dataPoints = sortedRecords.map(r => parseFloat(r.score) || 0);
+                    } else {
+                        const calcSettings = DataManager.getCalcSettings();
+                        const excludeDraws = calcSettings.excludeDraws;
+                        const ratesMap = new Map();
+
+                        if (mode === 'dates') {
+                            // --- 每日總勝率模式 ---
+                            const dateStatsMap = new Map();
+                            baseSortedRecords.forEach(r => {
+                                const d = (r.date || 'Unknown').substring(0, 10);
+                                if (!dateStatsMap.has(d)) dateStatsMap.set(d, { wins: 0, total: 0 });
+                                const stats = dateStatsMap.get(d);
+                                if (r.result === '勝利') { stats.wins++; stats.total++; }
+                                else if (r.result === '敗北') { stats.total++; }
+                                else if (r.result === '平手' && !excludeDraws) { stats.total++; }
+                            });
+                            dateStatsMap.forEach((stats, d) => {
+                                const rate = stats.total > 0 ? ((stats.wins / stats.total) * 100).toFixed(1) : 0;
+                                const representative = sortedRecords.find(r => (r.date || 'Unknown').startsWith(d));
+                                if (representative) ratesMap.set(representative.id, parseFloat(rate));
+                            });
+                        } else {
+                            // --- 20 場滾動勝率模式 ---
+                            const WINDOW_SIZE = 20;
+                            for (let i = 0; i < baseSortedRecords.length; i++) {
+                                const startIdx = Math.max(0, i - (WINDOW_SIZE - 1));
+                                const windowRecords = baseSortedRecords.slice(startIdx, i + 1);
+                                let winCount = 0;
+                                let validCount = 0;
+                                windowRecords.forEach(r => {
+                                    if (r.result === '勝利') { winCount++; validCount++; }
+                                    else if (r.result === '敗北') { validCount++; }
+                                    else if (r.result === '平手' && !excludeDraws) { validCount++; }
+                                });
+                                const rate = validCount > 0 ? ((winCount / validCount) * 100).toFixed(1) : 0;
+                                ratesMap.set(baseSortedRecords[i].id, parseFloat(rate));
+                            }
+                        }
+                        dataPoints = sortedRecords.map(r => ratesMap.get(r.id) || 0);
+                    }
+
+                    const pointColors = sortedRecords.map(r => {
+                        if (r.result === '勝利') return 'hsla(145, 70%, 50%, 1)';
+                        if (r.result === '敗北') return 'hsla(0, 70%, 55%, 1)';
+                        return 'hsla(0, 0%, 50%, 1)';
+                    });
+
+                    const ctx = document.getElementById('popout-score-chart');
+                    if (!ctx || sortedRecords.length === 0) return;
+
+                    if (popoutScoreChart) popoutScoreChart.destroy();
+                    popoutScoreChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: type === 'winrate' ? (i18n.get('chart_winrate') || '勝率') : (i18n.get('chart_score') || '分數'),
+                                data: dataPoints,
+                                borderColor: 'hsl(250, 80%, 60%)',
+                                backgroundColor: 'hsla(250, 80%, 60%, 0.1)',
+                                fill: true,
+                                tension: 0.3,
+                                pointRadius: 4,
+                                pointHoverRadius: 6,
+                                pointBackgroundColor: pointColors,
+                                pointBorderColor: '#fff',
+                                pointBorderWidth: 2,
+                                clip: true
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            interaction: { intersect: false, mode: 'index' },
+                            plugins: {
+                                tooltip: {
+                                    callbacks: {
+                                        title: function(context) {
+                                            const index = context[0].dataIndex;
+                                            const record = sortedRecords[index];
+                                            const dateStr = record && record.date ? record.date : '';
+                                            const label = context[0].label;
+                                            return mode === 'dates' ? `${i18n.get('chart_date')}: ${dateStr}` : (dateStr ? `${i18n.get('chart_date')}: ${dateStr} (${label})` : label);
+                                        },
+                                        label: function(context) {
+                                            if (type === 'winrate') {
+                                                // 從原始 dataPoints 陣列中獲取正確的數值
+                                                const realValue = dataPoints[context.dataIndex];
+                                                return `${i18n.get('chart_winrate') || '勝率'}: ${realValue}%`;
+                                            }
+                                            const record = sortedRecords[context.dataIndex];
+                                            if (record) {
+                                                return [
+                                                    `${i18n.get('chart_score')}: ${context.raw}`,
+                                                    `${i18n.get('chart_opponent')}: ${record.opponentDeck || ''}`,
+                                                    `${i18n.get('chart_result')}: ${record.result || ''}`
+                                                ];
+                                            }
+                                            return `${i18n.get('chart_score')}: ${context.raw}`;
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                x: {
+                                    grid: {
+                                        color: function(context) {
+                                            const index = context.index;
+                                            const vSegments = (function() {
+                                                const segments = [];
+                                                if (mode === 'games') {
+                                                    for (let i = 0; i < labels.length; i++) {
+                                                        const gameNum = startIndex + i;
+                                                        if (gameNum % SEGMENT_SIZE === 0) segments.push(i);
+                                                    }
+                                                }
+                                                return segments;
+                                            })();
+                                            if (vSegments.includes(index)) return 'hsla(0, 0%, 100%, 0.4)';
+                                            return 'transparent';
+                                        },
+                                        lineWidth: 2,
+                                        borderDash: [6, 4],
+                                        drawOnChartArea: true,
+                                        drawTicks: true
+                                    },
+                                    ticks: {
+                                        color: 'hsla(0, 0%, 100%, 0.6)',
+                                        maxRotation: 45,
+                                        minRotation: 45,
+                                        autoSkip: false,
+                                        callback: function(val, index) {
+                                            const label = this.getLabelForValue(val);
+                                            if (mode === 'dates') return label;
+                                            // 始終顯示第一個標籤，以及 50 的倍數編號
+                                            const num = parseInt(label.replace('#', '')) || 0;
+                                            if (index === 0 || num % SEGMENT_SIZE === 0) return label;
+                                            return '';
+                                        }
+                                    }
+                                },
+                                y: {
+                                    min: (function() {
+                                        if (type !== 'winrate' || dataPoints.length === 0) return undefined;
+                                        return Math.max(0, Math.floor(Math.min(...dataPoints) - 5));
+                                    })(),
+                                    max: (function() {
+                                        if (type !== 'winrate' || dataPoints.length === 0) return undefined;
+                                        return Math.min(100, Math.ceil(Math.max(...dataPoints) + 5));
+                                    })()
+                                }
+                            }
+                        }
+                    });
+
+                    // 針對勝率趨勢，確保數據點完整顯示
+                    if (popoutScoreChart) {
+                        popoutScoreChart.data.datasets[0].data = dataPoints;
+                        popoutScoreChart.update();
+                    }
+                }, 100);
+            }
+
+            /**
+             * 渲染:牌組分布圖
+             */
+            function renderDeckChart(providedRecords = null) {
+                // 顏色調色盤
+                const colorPalette = [
+                    'hsl(280, 70%, 60%)',   // 紫色
+                    'hsl(145, 70%, 50%)',   // 綠色
+                    'hsl(45, 100%, 55%)',   // 黃色
+                    'hsl(0, 70%, 55%)',     // 紅色
+                    'hsl(200, 80%, 55%)',   // 藍色
+                    'hsl(320, 70%, 60%)',   // 粉紅
+                    'hsl(30, 90%, 55%)',    // 橙色
+                    'hsl(170, 70%, 50%)',   // 青綠
+                    'hsl(260, 60%, 65%)',   // 淡紫
+                    'hsl(60, 80%, 50%)'     // 黃綠
+                ];
+
+                document.getElementById('popout-content').innerHTML = `
+                    <div class="card chart-card" style="height: auto;">
+                        <div style="padding: 1.2rem;">
+                            <div style="height: 500px;">
+                                <canvas id="popout-deck-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                setTimeout(() => {
+                    if (typeof Chart === 'undefined') {
+                        document.getElementById('popout-content').innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text-muted);">圖表庫載入失敗，請確認網路連線後重試。</div>';
+                        return;
+                    }
+                    let records = providedRecords;
+                    if (!records) {
+                        try {
+                            const stored = localStorage.getItem('cardBattleSearchResults');
+                            if (stored) {
+                                records = JSON.parse(stored);
+                            }
+                        } catch (e) {
+                            console.error('Failed to load search results:', e);
+                        }
+                        if (!records || records.length === 0) {
+                            records = DataManager.getRecords();
+                        }
+                    }
+
+                    const ctx = document.getElementById('popout-deck-chart');
+
+                    if (!records || records.length === 0) {
+                        ctx.parentElement.innerHTML = '<div style="color: var(--text-muted); padding: 1rem; text-align: center;">沒有資料可顯示</div>';
+                        return;
+                    }
+
+                    // 統計對手牌組分布
+                    const deckCounts = {};
+                    records.forEach(r => {
+                        if (r.opponentDeck) {
+                            deckCounts[r.opponentDeck] = (deckCounts[r.opponentDeck] || 0) + 1;
+                        }
+                    });
+
+                    // 排序
+                    const sortedDecks = Object.entries(deckCounts).sort((a, b) => b[1] - a[1]);
+
+                    if (sortedDecks.length === 0) {
+                        ctx.parentElement.innerHTML = '<div style="color: var(--text-muted); padding: 1rem; text-align: center;">沒有對手牌組資料</div>';
+                        return;
+                    }
+
+                    const totalGames = records.length;
+
+                    // 如果超過10種牌組,將後面的合併為「其他」
+                    let displayDecks = [];
+                    let othersData = [];
+
+                    if (sortedDecks.length > 10) {
+                        const top9 = sortedDecks.slice(0, 9);
+                        const others = sortedDecks.slice(9);
+                        const othersSum = others.reduce((sum, [_, count]) => sum + count, 0);
+                        othersData = others;
+
+                        displayDecks = [...top9, [i18n.get('opt_others') || '其他', othersSum]];
+                    } else {
+                        displayDecks = sortedDecks;
+                    }
+
+                    const labels = displayDecks.map(([deck]) => deck);
+                    const data = displayDecks.map(([_, count]) => count);
+                    const colors = displayDecks.map((_, i) => colorPalette[i % colorPalette.length]);
+
+                    // 創建圖表 (啟用預設圖例)
+                    new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels,
+                            datasets: [{
+                                data,
+                                backgroundColor: colors,
+                                borderColor: '#ffffff',
+                                borderWidth: 2,
+                                hoverOffset: 10
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'top',
+                                    labels: {
+                                        color: 'hsla(0, 0%, 100%, 0.9)',
+                                        padding: 15,
+                                        usePointStyle: true,
+                                        pointStyle: 'rect',
+                                        boxWidth: 18,
+                                        boxHeight: 14,
+                                        font: {
+                                            size: 14
+                                        }
+                                    }
+                                },
+                                tooltip: {
+                                    backgroundColor: 'hsla(230, 25%, 15%, 0.95)',
+                                    titleColor: '#fff',
+                                    bodyColor: '#fff',
+                                    borderColor: 'hsla(250, 80%, 60%, 0.5)',
+                                    borderWidth: 1,
+                                    padding: 12,
+                                    callbacks: {
+                                        label: function (context) {
+                                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                            const percentage = ((context.raw / total) * 100).toFixed(1);
+                                            return `${context.label}: ${context.raw} 場 (${percentage}%)`;
+                                        },
+                                        afterBody: function (context) {
+                                            // 如果是「其他」類別,顯示詳細資訊
+                                            const othersLabel = i18n.get('opt_others') || '其他';
+                                            if (context[0] && context[0].label === othersLabel && othersData.length > 0) {
+                                                const lines = ['', '包含:'];
+                                                othersData.forEach(([deck, count]) => {
+                                                    const pct = ((count / totalGames) * 100).toFixed(1);
+                                                    lines.push(`  ${deck}: ${count}場 (${pct}%)`);
+                                                });
+                                                return lines;
+                                            }
+                                            return [];
+                                        }
+                                    }
+                                }
+                            },
+                            cutout: '50%'
+                        }
+                    });
+                }, 200);
+            }
+
+            /**
+             * 渲染：SET 數據比較（彈出視窗）
+             */
+            function renderSetComparisonCard(providedRecords = null) {
+                let records = providedRecords;
+                if (!records) {
+                    try {
+                        const stored = localStorage.getItem('cardBattleSearchResults');
+                        if (stored) records = JSON.parse(stored);
+                    } catch (e) { console.error('Failed to load search results:', e); }
+                    if (!records || records.length === 0) records = DataManager.getRecords();
+                }
+
+                document.getElementById('popout-content').innerHTML = `
+                    <div class="card set-comparison-card">
+                        <div style="display:flex; align-items:center; gap:0.5rem; padding:0.5rem 1rem; border-bottom:1px solid var(--border-color);">
+                            <label for="popout-set-size" style="font-size:0.85rem;">${i18n.get('label_set_size') || 'SET 大小（場數）'}</label>
+                            <input type="number" id="popout-set-size" min="5" max="500" value="40" style="width:70px;">
+                        </div>
+                        <div id="popout-set-comparison-content"></div>
+                    </div>
+                `;
+
+                function doRender() {
+                    const setSizeInput = document.getElementById('popout-set-size');
+                    const setSize = setSizeInput ? parseInt(setSizeInput.value) || 40 : 40;
+                    popoutRenderSetComparison(document.getElementById('popout-set-comparison-content'), records, setSize);
+                }
+
+                doRender();
+                document.getElementById('popout-set-size')?.addEventListener('change', doRender);
+            }
+
+            /**
+             * 渲染：牌組勝率總覽（彈出視窗）
+             */
+            function renderMatchupOverviewCard(providedRecords = null) {
+                let records = providedRecords;
+                if (!records) {
+                    try {
+                        const stored = localStorage.getItem('cardBattleSearchResults');
+                        if (stored) records = JSON.parse(stored);
+                    } catch (e) { console.error('Failed to load search results:', e); }
+                    if (!records || records.length === 0) records = DataManager.getRecords();
+                }
+
+                document.getElementById('popout-content').innerHTML = `
+                    <div class="card matchup-overview-card">
+                        <div class="table-container">
+                            <table id="popout-matchup-table">
+                                <thead>
+                                    <tr>
+                                        <th>${i18n.get('th_matchup_deck') || '對手牌組'}</th>
+                                        <th>${i18n.get('th_matchup_games') || '對戰場次'}</th>
+                                        <th>${i18n.get('th_matchup_win_rate') || '總勝率'}</th>
+                                        <th>${i18n.get('th_matchup_first_win') || '先攻勝率'}</th>
+                                        <th>${i18n.get('th_matchup_second_win') || '後攻勝率'}</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="popout-matchup-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+
+                popoutRenderMatchupOverview(document.getElementById('popout-matchup-tbody'), records);
+            }
+
+            /**
+             * Popout SET comparison render logic (self-contained)
+             */
+            function popoutRenderSetComparison(container, results, setSize) {
+                if (!container) return;
+                if (results.length < setSize * 2) {
+                    container.innerHTML = `<div style="padding:1.5rem; text-align:center; color:var(--text-muted);">${i18n.get('label_not_enough_data') || '資料不足'} (${results.length}/${setSize * 2})</div>`;
+                    return;
+                }
+
+                const currentSet = results.slice(0, setSize);
+                const previousSet = results.slice(setSize, setSize * 2);
+
+                function calcStats(set) {
+                    const total = set.length;
+                    const wins = set.filter(r => r.result === '勝利').length;
+                    const firstCount = set.filter(r => r.turnOrder === '先手').length;
+                    const secondCount = set.filter(r => r.turnOrder === '後手').length;
+                    const firstWins = set.filter(r => r.turnOrder === '先手' && r.result === '勝利').length;
+                    const secondWins = set.filter(r => r.turnOrder === '後手' && r.result === '勝利').length;
+                    const turnTotal = firstCount + secondCount;
+                    return {
+                        winRate: total > 0 ? (wins / total * 100) : 0,
+                        firstRate: turnTotal > 0 ? (firstCount / turnTotal * 100) : 0,
+                        firstWinRate: firstCount > 0 ? (firstWins / firstCount * 100) : 0,
+                        secondWinRate: secondCount > 0 ? (secondWins / secondCount * 100) : 0
+                    };
+                }
+
+                const curr = calcStats(currentSet);
+                const prev = calcStats(previousSet);
+
+                function diffHtml(currVal, prevVal) {
+                    const diff = currVal - prevVal;
+                    const cls = diff > 0 ? 'positive' : diff < 0 ? 'negative' : 'neutral';
+                    const arrow = diff > 0 ? '▲' : diff < 0 ? '▼' : '—';
+                    return `<span class="set-diff ${cls}">${arrow} ${Math.abs(diff).toFixed(1)}%</span>`;
+                }
+
+                function escapeHtml(unsafe) {
+                    if (!unsafe) return '';
+                    return unsafe.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+                }
+
+                // 對不同牌組的勝率變化
+                function calcDeckWinRates(set) {
+                    const stats = {};
+                    set.forEach(r => {
+                        const d = r.opponentDeck || '(unknown)';
+                        if (!stats[d]) stats[d] = { games: 0, wins: 0 };
+                        stats[d].games++;
+                        if (r.result === '勝利') stats[d].wins++;
+                    });
+                    return stats;
+                }
+
+                const currDeckWR = calcDeckWinRates(currentSet);
+                const prevDeckWR = calcDeckWinRates(previousSet);
+                const allWRDecks = new Set([...Object.keys(currDeckWR), ...Object.keys(prevDeckWR)]);
+
+                let deckWinRateHtml = '';
+                const sortedWRDecks = [...allWRDecks].sort((a, b) => (currDeckWR[b]?.games || 0) - (currDeckWR[a]?.games || 0));
+                sortedWRDecks.forEach(deck => {
+                    const c = currDeckWR[deck] || { games: 0, wins: 0 };
+                    const p = prevDeckWR[deck] || { games: 0, wins: 0 };
+                    const cWR = c.games > 0 ? (c.wins / c.games * 100) : null;
+                    const pWR = p.games > 0 ? (p.wins / p.games * 100) : null;
+                    let diffCell = '<span class="set-diff neutral">—</span>';
+                    if (cWR !== null && pWR !== null) {
+                        diffCell = diffHtml(cWR, pWR);
+                    }
+                    deckWinRateHtml += `<tr>
+                        <td>${escapeHtml(deck)}</td>
+                        <td>${p.games > 0 ? p.wins + '/' + p.games : '-'}</td>
+                        <td>${p.games > 0 ? pWR.toFixed(1) + '%' : '-'}</td>
+                        <td>${c.games > 0 ? c.wins + '/' + c.games : '-'}</td>
+                        <td>${c.games > 0 ? cWR.toFixed(1) + '%' : '-'}</td>
+                        <td>${diffCell}</td>
+                    </tr>`;
+                });
+
+                // 牌組分布（前10 + 其他）
+                function getDeckDist(set) {
+                    const dist = {};
+                    set.forEach(r => {
+                        if (r.opponentDeck) dist[r.opponentDeck] = (dist[r.opponentDeck] || 0) + 1;
+                    });
+                    return dist;
+                }
+
+                function topNPlusOthers(dist, n) {
+                    const sorted = Object.entries(dist).sort((a, b) => b[1] - a[1]);
+                    const topN = sorted.slice(0, n);
+                    const othersCount = sorted.slice(n).reduce((sum, [, c]) => sum + c, 0);
+                    const result = topN.map(([name, count]) => ({ name, count }));
+                    if (othersCount > 0) {
+                        result.push({ name: i18n.get('label_others') || '其他', count: othersCount });
+                    }
+                    return result;
+                }
+
+                const currDist = getDeckDist(currentSet);
+                const prevDist = getDeckDist(previousSet);
+                const currTop = topNPlusOthers(currDist, 10);
+                const prevTop = topNPlusOthers(prevDist, 10);
+
+                const distNames = new Set([...currTop.map(d => d.name), ...prevTop.map(d => d.name)]);
+                const currDistMap = Object.fromEntries(currTop.map(d => [d.name, d.count]));
+                const prevDistMap = Object.fromEntries(prevTop.map(d => [d.name, d.count]));
+
+                let deckChangeHtml = '';
+                const sortedDistNames = [...distNames].sort((a, b) => (currDistMap[b] || 0) - (currDistMap[a] || 0));
+                sortedDistNames.forEach(deck => {
+                    const c = currDistMap[deck] || 0;
+                    const p = prevDistMap[deck] || 0;
+                    const cPct = (c / setSize * 100).toFixed(1);
+                    const pPct = (p / setSize * 100).toFixed(1);
+                    const diff = c - p;
+                    let tag = '';
+                    const othersLabel = i18n.get('label_others') || '其他';
+                    if (p === 0 && c > 0 && deck !== othersLabel) tag = `<span class="set-tag new">${i18n.get('label_new_deck')}</span>`;
+                    else if (c === 0 && p > 0 && deck !== othersLabel) tag = `<span class="set-tag gone">${i18n.get('label_gone_deck')}</span>`;
+                    const cls = diff > 0 ? 'positive' : diff < 0 ? 'negative' : 'neutral';
+                    deckChangeHtml += `<tr>
+                        <td>${escapeHtml(deck)} ${tag}</td>
+                        <td>${p} (${pPct}%)</td>
+                        <td>${c} (${cPct}%)</td>
+                        <td><span class="set-diff ${cls}">${diff > 0 ? '+' : ''}${diff}</span></td>
+                    </tr>`;
+                });
+
+                container.innerHTML = `
+                    <div class="set-comparison-grid">
+                        <table class="set-stats-table">
+                            <thead><tr>
+                                <th></th>
+                                <th>${i18n.get('label_previous_set') || '前一組'} (${setSize})</th>
+                                <th>${i18n.get('label_current_set') || '最新一組'} (${setSize})</th>
+                                <th>${i18n.get('label_difference') || '差異'}</th>
+                            </tr></thead>
+                            <tbody>
+                                <tr><td>${i18n.get('stat_win_rate')}</td><td>${prev.winRate.toFixed(1)}%</td><td>${curr.winRate.toFixed(1)}%</td><td>${diffHtml(curr.winRate, prev.winRate)}</td></tr>
+                                <tr><td>${i18n.get('stat_first_rate')}</td><td>${prev.firstRate.toFixed(1)}%</td><td>${curr.firstRate.toFixed(1)}%</td><td>${diffHtml(curr.firstRate, prev.firstRate)}</td></tr>
+                                <tr><td>${i18n.get('stat_first_win_rate')}</td><td>${prev.firstWinRate.toFixed(1)}%</td><td>${curr.firstWinRate.toFixed(1)}%</td><td>${diffHtml(curr.firstWinRate, prev.firstWinRate)}</td></tr>
+                                <tr><td>${i18n.get('stat_second_win_rate')}</td><td>${prev.secondWinRate.toFixed(1)}%</td><td>${curr.secondWinRate.toFixed(1)}%</td><td>${diffHtml(curr.secondWinRate, prev.secondWinRate)}</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <h4 class="set-section-toggle" id="toggle-deck-wr-section" style="margin:1rem 0 0.5rem; padding:0 1rem; cursor:pointer; user-select:none;">
+                        <span class="set-section-arrow">▶</span> ${i18n.get('label_deck_winrate_change') || '對不同牌組勝率變化'}
+                    </h4>
+                    <div id="deck-wr-section" class="set-collapsible-section" style="display:none; padding:0 1rem 1rem;">
+                        <div class="table-container">
+                            <table class="set-deck-table">
+                                <thead>
+                                    <tr>
+                                        <th rowspan="2">${i18n.get('th_matchup_deck') || '牌組'}</th>
+                                        <th colspan="2" style="text-align:center;">${i18n.get('label_previous_set') || '上一組 SET'}</th>
+                                        <th colspan="2" style="text-align:center;">${i18n.get('label_current_set') || '最新 SET'}</th>
+                                        <th rowspan="2">${i18n.get('label_difference') || '差異'}</th>
+                                    </tr>
+                                    <tr>
+                                        <th style="font-weight:normal; font-size:0.85em; opacity:0.8; text-align:center;">(${i18n.get('label_wins_total') || '勝場/總場次'})</th>
+                                        <th style="font-weight:normal; font-size:0.85em; opacity:0.8; text-align:center;">${i18n.get('stat_win_rate') || '勝率'}</th>
+                                        <th style="font-weight:normal; font-size:0.85em; opacity:0.8; text-align:center;">(${i18n.get('label_wins_total') || '勝場/總場次'})</th>
+                                        <th style="font-weight:normal; font-size:0.85em; opacity:0.8; text-align:center;">${i18n.get('stat_win_rate') || '勝率'}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${deckWinRateHtml}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <h4 class="set-section-toggle" id="toggle-deck-dist-section" style="margin:1rem 0 0.5rem; padding:0 1rem; cursor:pointer; user-select:none;">
+                        <span class="set-section-arrow">▶</span> ${i18n.get('label_deck_distribution_change') || '牌組分布變化'}
+                    </h4>
+                    <div id="deck-dist-section" class="set-collapsible-section" style="display:none; padding:0 1rem 1rem;">
+                        <div class="table-container">
+                            <table class="set-deck-table">
+                                <thead><tr>
+                                    <th>${i18n.get('th_matchup_deck') || '對手牌組'}</th>
+                                    <th>${i18n.get('label_previous_set') || '上一組 SET'}</th>
+                                    <th>${i18n.get('label_current_set') || '最新 SET'}</th>
+                                    <th>${i18n.get('label_difference') || '差異'}</th>
+                                </tr></thead>
+                                <tbody>${deckChangeHtml}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+
+                // Bind toggle events for collapsible sections
+                const toggleWrBtn = container.querySelector('#toggle-deck-wr-section');
+                const wrSection = container.querySelector('#deck-wr-section');
+                if (toggleWrBtn && wrSection) {
+                    toggleWrBtn.addEventListener('click', () => {
+                        const isHidden = wrSection.style.display === 'none';
+                        wrSection.style.display = isHidden ? '' : 'none';
+                        toggleWrBtn.querySelector('.set-section-arrow').textContent = isHidden ? '▼' : '▶';
+                    });
+                }
+
+                const toggleDistBtn = container.querySelector('#toggle-deck-dist-section');
+                const distSection = container.querySelector('#deck-dist-section');
+                if (toggleDistBtn && distSection) {
+                    toggleDistBtn.addEventListener('click', () => {
+                        const isHidden = distSection.style.display === 'none';
+                        distSection.style.display = isHidden ? '' : 'none';
+                        toggleDistBtn.querySelector('.set-section-arrow').textContent = isHidden ? '▼' : '▶';
+                    });
+                }
+            }
+
+            /**
+             * Popout matchup overview render logic (self-contained)
+             */
+            function popoutRenderMatchupOverview(tbody, results) {
+                if (!tbody || results.length === 0) return;
+                const deckStats = {};
+                let totalWins = 0, totalGames = 0;
+                let totalFirstGames = 0, totalFirstWins = 0;
+                let totalSecondGames = 0, totalSecondWins = 0;
+                results.forEach(r => {
+                    const deck = r.opponentDeck || '(unknown)';
+                    if (!deckStats[deck]) deckStats[deck] = { games: 0, wins: 0, firstGames: 0, firstWins: 0, secondGames: 0, secondWins: 0 };
+                    deckStats[deck].games++; totalGames++;
+                    if (r.result === '勝利') { deckStats[deck].wins++; totalWins++; }
+                    if (r.turnOrder === '先手') { deckStats[deck].firstGames++; totalFirstGames++; if (r.result === '勝利') { deckStats[deck].firstWins++; totalFirstWins++; } }
+                    if (r.turnOrder === '後手') { deckStats[deck].secondGames++; totalSecondGames++; if (r.result === '勝利') { deckStats[deck].secondWins++; totalSecondWins++; } }
+                });
+                function pctVal(n, d) { return d > 0 ? (n / d * 100).toFixed(1) + '%' : '-'; }
+                function wrClass(n, d) { if (d === 0) return ''; const rate = n / d * 100; if (rate >= 60) return 'wr-high'; if (rate >= 45) return 'wr-mid'; return 'wr-low'; }
+                let html = `<tr class="matchup-total-row"><td><strong>${i18n.get('label_all_decks') || '全部牌組'}</strong></td><td><strong>${totalGames}</strong></td><td class="${wrClass(totalWins, totalGames)}"><strong>${pctVal(totalWins, totalGames)}</strong></td><td class="${wrClass(totalFirstWins, totalFirstGames)}"><strong>${pctVal(totalFirstWins, totalFirstGames)}</strong></td><td class="${wrClass(totalSecondWins, totalSecondGames)}"><strong>${pctVal(totalSecondWins, totalSecondGames)}</strong></td></tr>`;
+                const sorted = Object.entries(deckStats).sort((a, b) => b[1].games - a[1].games);
+                sorted.forEach(([deck, s]) => {
+                    html += `<tr><td>${escapeHtml(deck)}</td><td>${s.games}</td><td class="${wrClass(s.wins, s.games)}">${pctVal(s.wins, s.games)}</td><td class="${wrClass(s.firstWins, s.firstGames)}">${pctVal(s.firstWins, s.firstGames)}</td><td class="${wrClass(s.secondWins, s.secondGames)}">${pctVal(s.secondWins, s.secondGames)}</td></tr>`;
+                });
+                tbody.innerHTML = html;
+            }
+
+
+
+            /**
+             * 渲染：統計摘要
+             */
+            function renderStatsGrid(providedRecords = null) {
+                let records = providedRecords;
+                if (!records) {
+                    // 優先使用過濾後的搜尋結果
+                    try {
+                        const stored = localStorage.getItem('cardBattleSearchResults');
+                        if (stored) {
+                            records = JSON.parse(stored);
+                        }
+                    } catch (e) {
+                        console.error('Failed to load search results:', e);
+                    }
+                    // 若搜尋結果為空，則使用全部紀錄
+                    if (!records || records.length === 0) {
+                        records = DataManager.getRecords();
+                    }
+                }
+
+                // 從 DataManager 載入計算設定
+                const calcSettings = DataManager.getCalcSettings();
+                const excludeDraws = calcSettings.excludeDraws;
+                const calcNoDrawId = 'popout-calc-no-draw';
+
+                const total = records.length;
+
+                // 計算細項
+                const wins = records.filter(r => r.result === '勝利').length;
+                const draws = records.filter(r => r.result === '平手').length;
+                const unrecorded = records.filter(r => !r.result || (r.result !== '勝利' && r.result !== '敗北' && r.result !== '平手')).length;
+
+                const firstMoves = records.filter(r => r.turnOrder === '先手').length;
+                const firstWins = records.filter(r => r.turnOrder === '先手' && r.result === '勝利').length;
+                const firstDraws = records.filter(r => r.turnOrder === '先手' && r.result === '平手').length;
+                const firstUnrecorded = records.filter(r => r.turnOrder === '先手' && (!r.result || (r.result !== '勝利' && r.result !== '敗北' && r.result !== '平手'))).length;
+
+                const secondMoves = records.filter(r => r.turnOrder === '後手').length;
+                const secondWins = records.filter(r => r.turnOrder === '後手' && r.result === '勝利').length;
+                const secondDraws = records.filter(r => r.turnOrder === '後手' && r.result === '平手').length;
+                const secondUnrecorded = records.filter(r => r.turnOrder === '後手' && (!r.result || (r.result !== '勝利' && r.result !== '敗北' && r.result !== '平手'))).length;
+
+                // 同步主頁面的計算邏輯
+                const totalValid = total - unrecorded;
+                const totalDenominator = excludeDraws ? (totalValid - draws) : totalValid;
+                const firstDenominator = excludeDraws ? (firstMoves - firstDraws - firstUnrecorded) : (firstMoves - firstUnrecorded);
+                const secondDenominator = excludeDraws ? (secondMoves - secondDraws - secondUnrecorded) : (secondMoves - secondUnrecorded);
+
+                const turnDenominator = firstMoves + secondMoves;
+                const winRate = totalDenominator > 0 ? ((wins / totalDenominator) * 100).toFixed(1) : '0.0';
+                const firstRate = turnDenominator > 0 ? ((firstMoves / turnDenominator) * 100).toFixed(1) : '0.0';
+                const firstWinRate = firstDenominator > 0 ? ((firstWins / firstDenominator) * 100).toFixed(1) : '0.0';
+                const secondWinRate = secondDenominator > 0 ? ((secondWins / secondDenominator) * 100).toFixed(1) : '0.0';
+
+                // 計算附註資訊
+                const turnUnrecordedCount = records.filter(r => !r.turnOrder).length;
+                const statNotes = [];
+                if (draws > 0) statNotes.push(`${i18n.get('label_draw_stat')}<i>${draws}</i>`);
+                if (unrecorded > 0) statNotes.push(`${i18n.get('label_unrecorded')}<i>${unrecorded}</i>`);
+                if (turnUnrecordedCount > 0) statNotes.push(`${i18n.get('label_turn_unrecorded')}<i>${turnUnrecordedCount}</i>`);
+
+                let noteText = statNotes.length > 0 ? statNotes.join('') : '';
+                if (noteText) noteText += '<br>' + i18n.get('label_calc_note_suffix');
+
+                const statNoteHtml = noteText ? `<div class="stat-note">${noteText}</div>` : '';
+
+                // 保存當前簡易模式狀態
+                const wasSimpleMode = localStorage.getItem('statsDisplayMode') === 'simple';
+
+                const contentEl = document.getElementById('popout-content');
+                contentEl.innerHTML = `
+                    <div style="margin-bottom: 1rem; display: flex; justify-content: flex-end;">
+                        <label class="checkbox-inline" style="cursor: pointer; display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; color: var(--text-muted);">
+                            <input type="checkbox" id="${calcNoDrawId}" ${excludeDraws ? 'checked' : ''}>
+                            <span data-i18n="label_calc_no_draw">${i18n.get('label_calc_no_draw')}</span>
+                        </label>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="card stat-card">
+                            <div class="stat-icon">📊</div>
+                            <div class="stat-content">
+                                <div class="stat-label">${i18n.get('stat_total')}</div>
+                                <div class="stat-value-container" style="text-align: right;">
+                                    <div class="stat-value">${total}</div>
+                                    ${statNoteHtml}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card stat-card">
+                            <div class="stat-icon">🏆</div>
+                            <div class="stat-content">
+                                <div class="stat-label">${i18n.get('stat_win_rate')}</div>
+                                <div class="stat-value">${winRate}%</div>
+                            </div>
+                        </div>
+                        <div class="card stat-card">
+                            <div class="stat-icon">🎯</div>
+                            <div class="stat-content">
+                                <div class="stat-label">${i18n.get('stat_first_rate')}</div>
+                                <div class="stat-value">${firstRate}%</div>
+                            </div>
+                        </div>
+                        <div class="card stat-card">
+                            <div class="stat-icon">⭐</div>
+                            <div class="stat-content">
+                                <div class="stat-label">${i18n.get('stat_first_win_rate')}</div>
+                                <div class="stat-value">${firstWinRate}%</div>
+                            </div>
+                        </div>
+                        <div class="card stat-card">
+                            <div class="stat-icon">🌙</div>
+                            <div class="stat-content">
+                                <div class="stat-label">${i18n.get('stat_second_win_rate')}</div>
+                                <div class="stat-value">${secondWinRate}%</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // 重新綁定事件
+                document.getElementById(calcNoDrawId).addEventListener('change', (e) => {
+                    const isChecked = e.target.checked;
+                    // 儲存設定並廣播
+                    DataManager.saveCalcSettings({ excludeDraws: isChecked });
+                    SyncManager.broadcast(SyncManager.EventTypes.SETTINGS_CHANGED, {
+                        calcSettings: { excludeDraws: isChecked }
+                    });
+                    renderStatsGrid(providedRecords);
+                });
+
+                // 恢復簡易模式狀態
+                if (wasSimpleMode) {
+                    setTimeout(() => {
+                        setSimpleStatsMode(true);
+                    }, 0);
+                }
+            }
+
+            /**
+             * 渲染：搜尋結果
+             */
+            function renderSearchResults(providedRecords = null) {
+                let searchResults = [];
+
+                // 優先使用傳入的原始紀錄進行過濾，否則從 localStorage 讀取已過濾結果
+                if (providedRecords && Array.isArray(providedRecords)) {
+                    // 從 localStorage 讀取目前的篩選條件
+                    let filters = { customFields: {} };
+                    try {
+                        const storedFilters = localStorage.getItem('cardBattleSearchFilters');
+                        if (storedFilters) {
+                            filters = JSON.parse(storedFilters);
+                        }
+                    } catch (e) {
+                        console.error('Failed to load filters:', e);
+                    }
+
+                    // 執行與 SearchManager 相同的過濾邏輯
+                    searchResults = providedRecords.filter(record => {
+                        // 日期範圍 (注意格式轉換)
+                        if (filters.dateStart && record.date) {
+                            const recordDate = new Date(record.date.replace(/\//g, '-'));
+                            const startDate = new Date(filters.dateStart);
+                            if (recordDate < startDate) return false;
+                        }
+                        if (filters.dateEnd && record.date) {
+                            const recordDate = new Date(record.date.replace(/\//g, '-'));
+                            const endDate = new Date(filters.dateEnd);
+                            if (recordDate > endDate) return false;
+                        }
+
+                        if (filters.myDeck && record.myDeck !== filters.myDeck) return false;
+                        if (filters.opponentDeck && record.opponentDeck !== filters.opponentDeck) return false;
+                        if (filters.turnOrder && record.turnOrder !== filters.turnOrder) return false;
+
+                        // 勝負處理
+                        if (filters.result === '平手' && record.result === '平手') {
+                            // 保持通過
+                        } else if (filters.result && record.result !== filters.result) {
+                            return false;
+                        }
+
+                        if (filters.gameName && record.gameName !== filters.gameName) return false;
+                        if (filters.scoreStart !== '' && record.score !== undefined && record.score < parseInt(filters.scoreStart)) return false;
+                        if (filters.scoreEnd !== '' && record.score !== undefined && record.score > parseInt(filters.scoreEnd)) return false;
+
+                        if (filters.keyword) {
+                            const keyword = filters.keyword.toLowerCase();
+                            const notes = (record.notes || '').toLowerCase();
+                            const misplayNote = (record.misplayNote || '').toLowerCase();
+                            if (!notes.includes(keyword) && !misplayNote.includes(keyword)) return false;
+                        }
+
+                        // 自訂欄位
+                        for (const [fieldId, value] of Object.entries(filters.customFields || {})) {
+                            if (value && record[fieldId] !== value) return false;
+                        }
+                        return true;
+                    });
+
+                    // 儲存過濾後的結果供後續使用
+                    localStorage.setItem('cardBattleSearchResults', JSON.stringify(searchResults));
+                } else {
+                    try {
+                        const stored = localStorage.getItem('cardBattleSearchResults');
+                        if (stored) {
+                            searchResults = JSON.parse(stored);
+                        }
+                    } catch (e) {
+                        console.error('Failed to load search results:', e);
+                    }
+                }
+
+                document.getElementById('popout-content').innerHTML = `
+                    <div class="card" id="search-results-card">
+                        <div class="card-header" style="padding: var(--spacing-md) var(--spacing-lg); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--spacing-md);">
+                            <div style="display: flex; gap: var(--spacing-sm); align-items: center;">
+                                <span id="search-result-count" class="badge"></span>
+                            </div>
+                            <div style="display: flex; gap: var(--spacing-sm); align-items: center;">
+                                <button id="search-toggle-misplay-notes-btn" class="btn btn-sm btn-outline" data-i18n="btn_show_misplay_notes">顯示渣操備註</button>
+                                <button id="search-column-settings-btn" class="btn btn-sm btn-outline" data-i18n="btn_column_settings">欄位設定</button>
+                            </div>
+                        </div>
+
+                        <div class="table-container">
+                            <table id="search-results-table">
+                                <thead>
+                                    <tr id="search-table-header-row"></tr>
+                                </thead>
+                                <tbody id="search-results-tbody"></tbody>
+                            </table>
+                        </div>
+
+                        <div id="no-search-results" class="no-records hidden">
+                            <span class="no-records-icon">🔍</span>
+                            <p data-i18n="search_prompt">請設定搜尋條件後點擊搜尋按鈕</p>
+                        </div>
+
+                        <div id="search-pagination-controls" class="pagination-controls hidden">
+                            <button id="search-page-first" class="btn btn-sm">⏮️</button>
+                            <button id="search-page-prev-5" class="btn btn-sm">⏪</button>
+                            <button id="search-page-prev" class="btn btn-sm">◀️</button>
+                            <span id="search-page-info">1 / 1</span>
+                            <button id="search-page-next" class="btn btn-sm">▶️</button>
+                            <button id="search-page-next-5" class="btn btn-sm">⏩</button>
+                            <button id="search-page-last" class="btn btn-sm">⏭️</button>
+                            <div class="page-jump">
+                                <input type="number" id="search-page-jump-input" min="1" step="1">
+                                <button id="search-page-jump-btn" class="btn btn-sm btn-primary">✔</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // 直接渲染搜尋結果，不使用 SearchManager（避免重複初始化和無限迴圈）
+                renderSearchResultsTable(searchResults);
+
+                // 綁定按鈕事件（彈出視窗專用實作）
+                const btnMisplay = document.getElementById('search-toggle-misplay-notes-btn');
+                if (btnMisplay) {
+                    btnMisplay.addEventListener('click', () => {
+                        togglePopoutMisplayNotes();
+                    });
+                }
+
+                const btnColumn = document.getElementById('search-column-settings-btn');
+                if (btnColumn) {
+                    btnColumn.addEventListener('click', () => {
+                        openPopoutColumnSettings();
+                    });
+                }
+            }
+
+            /**
+             * 彈出視窗專用：切換渣操備註顯示
+             */
+            let isPopoutMisplayNotesVisible = false;
+            function togglePopoutMisplayNotes() {
+                isPopoutMisplayNotesVisible = !isPopoutMisplayNotesVisible;
+                const btn = document.getElementById('search-toggle-misplay-notes-btn');
+                const table = document.getElementById('search-results-table');
+
+                if (isPopoutMisplayNotesVisible) {
+                    table?.classList.add('show-misplay-notes');
+                    if (btn) btn.textContent = i18n.get('btn_hide_misplay_notes') || '隱藏渣操備註';
+                } else {
+                    table?.classList.remove('show-misplay-notes');
+                    if (btn) btn.textContent = i18n.get('btn_show_misplay_notes') || '顯示渣操備註';
+                }
+
+                // 重新渲染表格以顯示/隱藏備註（使用 localStorage 中的過濾結果）
+                let searchResults = [];
+                try {
+                    const stored = localStorage.getItem('cardBattleSearchResults');
+                    if (stored) {
+                        searchResults = JSON.parse(stored);
+                    }
+                } catch (e) {
+                    console.error('Failed to load search results:', e);
+                }
+                renderSearchResultsTable(searchResults);
+                // 注意：不廣播此變更，因為渣操備註顯示是彈出視窗的本地設定
+            }
+
+
+            /**
+             * 彈出視窗專用：開啟欄位設定
+             */
+            function openPopoutColumnSettings() {
+                const modal = document.getElementById('column-settings-modal');
+                if (!modal) return;
+
+                // 顯示 Modal
+                modal.classList.add('active');
+
+                // 載入搜尋專用欄位設定
+                const columnSettings = DataManager.getSearchColumnSettings ?
+                    DataManager.getSearchColumnSettings() :
+                    (DataManager.getColumnSettings() || { visible: {}, widths: {} });
+
+                // 渲染欄位勾選框（移除圖示）
+                const container = document.getElementById('column-checkbox-list');
+                if (container) {
+                    const allColumns = [
+                        { id: 'date', label: i18n.get('th_date') || '日期' },
+                        { id: 'myDeck', label: i18n.get('th_my_deck') || '己方牌組' },
+                        { id: 'opponentDeck', label: i18n.get('th_opponent_deck') || '對手牌組' },
+                        { id: 'turnOrder', label: i18n.get('th_turn') || '先後手' },
+                        { id: 'result', label: i18n.get('th_result') || '勝負' },
+                        { id: 'score', label: i18n.get('th_score') || '分數' },
+                        { id: 'misplay', label: i18n.get('th_misplay') || '渣操' },
+                        { id: 'gameName', label: i18n.get('th_game_name') || '遊戲' },
+                        { id: 'notes', label: i18n.get('th_notes') || '備註' },
+                        { id: 'createdAt', label: i18n.get('th_created_at') || '建立時間' }
+                    ];
+
+                    container.innerHTML = allColumns.map(col => {
+                        // gameName 和 createdAt 預設為隱藏（需 visible[id] === true）
+                        let isChecked;
+                        if (col.id === 'gameName' || col.id === 'createdAt') {
+                            isChecked = columnSettings.visible[col.id] === true;
+                        } else {
+                            isChecked = columnSettings.visible[col.id] !== false;
+                        }
+
+                        return `
+                        <label class="column-toggle-item">
+                            <input type="checkbox" 
+                                   id="col-checkbox-${col.id}" 
+                                   value="${col.id}" 
+                                   ${isChecked ? 'checked' : ''}>
+                            <span>${col.label}</span>
+                        </label>
+                    `;
+                    }).join('');
+                }
+
+                // 綁定儲存按鈕
+                const confirmBtn = document.getElementById('confirm-columns-btn');
+                if (confirmBtn) {
+                    confirmBtn.onclick = () => {
+                        savePopoutColumnSettings();
+                    };
+                }
+
+                // 綁定恢復預設按鈕
+                const resetBtn = document.getElementById('btn-reset-default');
+                if (resetBtn) {
+                    resetBtn.onclick = () => {
+                        resetPopoutColumnSettings();
+                    };
+                }
+            }
+
+            /**
+             * 恢復預設欄位設定（彈出視窗）
+             */
+            function resetPopoutColumnSettings() {
+                const newSettings = {
+                    visible: {},
+                    widths: {},
+                    rowHeight: 'slim'
+                };
+
+                // gameName 和 createdAt 預設為隱藏
+                const baseFields = ['date', 'myDeck', 'opponentDeck', 'turnOrder', 'result', 'score', 'gameName', 'misplay', 'notes', 'createdAt'];
+                baseFields.forEach(f => {
+                    if (f === 'gameName' || f === 'createdAt') {
+                        newSettings.visible[f] = false;
+                    } else {
+                        newSettings.visible[f] = true;
+                    }
+                });
+
+                // 儲存搜尋專用設定
+                if (DataManager.saveSearchColumnSettings) {
+                    DataManager.saveSearchColumnSettings(newSettings);
+                } else {
+                    DataManager.saveColumnSettings(newSettings);
+                }
+
+                // 廣播變更
+                if (typeof SyncManager !== 'undefined') {
+                    SyncManager.broadcast(SyncManager.EventTypes.SETTINGS_CHANGED, {
+                        searchColumnSettings: newSettings
+                    });
+                }
+
+                // 重新開啟 Modal 以更新顯示
+                openPopoutColumnSettings();
+
+                // 重新渲染表格
+                let searchResults = [];
+                try {
+                    const stored = localStorage.getItem('cardBattleSearchResults');
+                    if (stored) {
+                        searchResults = JSON.parse(stored);
+                    }
+                } catch (e) {
+                    console.error('Failed to load search results:', e);
+                }
+                renderSearchResultsTable(searchResults);
+            }
+
+
+            /**
+             * 儲存欄位設定並重新渲染
+             */
+            function savePopoutColumnSettings() {
+                const checkboxes = document.querySelectorAll('#column-checkbox-list input[type="checkbox"]');
+
+                // 取得搜尋專用欄位設定
+                const currentSettings = DataManager.getSearchColumnSettings ?
+                    DataManager.getSearchColumnSettings() :
+                    (DataManager.getColumnSettings() || { visible: {}, widths: {} });
+
+                if (!currentSettings.visible) currentSettings.visible = {};
+
+                // 更新 visible 設定
+                checkboxes.forEach(cb => {
+                    currentSettings.visible[cb.value] = cb.checked;
+                });
+
+                // 儲存搜尋專用設定
+                if (DataManager.saveSearchColumnSettings) {
+                    DataManager.saveSearchColumnSettings(currentSettings);
+                } else {
+                    DataManager.saveColumnSettings(currentSettings);
+                }
+
+                // 廣播欄位設定變更（雙向同步）
+                if (typeof SyncManager !== 'undefined') {
+                    SyncManager.broadcast(SyncManager.EventTypes.SETTINGS_CHANGED, {
+                        searchColumnSettings: currentSettings
+                    });
+                }
+
+                // 關閉 Modal
+                const modal = document.getElementById('column-settings-modal');
+                if (modal) modal.classList.remove('active');
+
+                // 重新渲染表格
+                let searchResults = [];
+                try {
+                    const stored = localStorage.getItem('cardBattleSearchResults');
+                    if (stored) {
+                        searchResults = JSON.parse(stored);
+                    }
+                } catch (e) {
+                    console.error('Failed to load search results:', e);
+                }
+                renderSearchResultsTable(searchResults);
+            }
+
+
+            /**
+             * 渲染搜尋結果表格（彈出視窗專用，不觸發 SearchManager）
+             */
+            let popoutSortField = 'date';
+            let popoutSortDirection = 'desc';
+            let currentResizerField = null;
+            let startX = 0;
+            let startWidth = 0;
+
+            function renderSearchResultsTable(results) {
+                const tbody = document.getElementById('search-results-tbody');
+                const headerRow = document.getElementById('search-table-header-row');
+                const countBadge = document.getElementById('search-result-count');
+                const noResults = document.getElementById('no-search-results');
+
+                if (!tbody || !headerRow) return;
+
+                // 更新結果數量（使用正確的翻譯鍵）
+                if (countBadge) {
+                    countBadge.textContent = i18n.get('result_count', results.length);
+                }
+
+                // 如果沒有結果，顯示提示訊息
+                if (results.length === 0) {
+                    tbody.innerHTML = '';
+                    if (noResults) noResults.classList.remove('hidden');
+                    return;
+                }
+
+                if (noResults) noResults.classList.add('hidden');
+
+                // 載入搜尋專用欄位設定
+                const columnSettings = DataManager.getSearchColumnSettings ?
+                    DataManager.getSearchColumnSettings() :
+                    (DataManager.getColumnSettings() || {});
+                if (!columnSettings.visible) columnSettings.visible = {};
+                const columnWidths = columnSettings.widths || {};
+
+
+                // 定義所有可用的欄位（加入 createdAt）
+                const allColumns = [
+                    { id: 'date', label: i18n.get('th_date') || '日期' },
+                    { id: 'myDeck', label: i18n.get('th_my_deck') || '己方牌組' },
+                    { id: 'opponentDeck', label: i18n.get('th_opponent_deck') || '對手牌組' },
+                    { id: 'turnOrder', label: i18n.get('th_turn') || '先後手' },
+                    { id: 'result', label: i18n.get('th_result') || '勝負' },
+                    { id: 'score', label: i18n.get('th_score') || '分數' },
+                    { id: 'misplay', label: i18n.get('th_misplay') || '渣操' },
+                    { id: 'gameName', label: i18n.get('th_game_name') || '遊戲' },
+                    { id: 'notes', label: i18n.get('th_notes') || '備註' },
+                    { id: 'createdAt', label: i18n.get('th_created_at') || '建立時間' }
+                ];
+
+                // 過濾隱藏的欄位（gameName 和 createdAt 需明確設為 true）
+                const visibleColumns = allColumns.filter(col => {
+                    if (col.id === 'gameName' || col.id === 'createdAt') {
+                        return columnSettings.visible[col.id] === true;
+                    } else {
+                        return columnSettings.visible[col.id] !== false;
+                    }
+                });
+
+                // 渲染表頭（含排序和調整寬度功能）
+                headerRow.innerHTML = visibleColumns.map(col => {
+                    const width = columnWidths[col.id] ? ` style="width: ${columnWidths[col.id]}"` : '';
+                    const activeClass = popoutSortField === col.id ? 'active' : '';
+                    const indicator = popoutSortField === col.id ? (popoutSortDirection === 'asc' ? '▲' : '▼') : '↕';
+
+                    return `<th data-col="${col.id}"${width} class="sortable">
+                        <span>${col.label}</span>
+                        <span class="sort-indicator ${activeClass}">${indicator}</span>
+                        <div class="resizer"></div>
+                    </th>`;
+                }).join('');
+
+                // 綁定排序事件（使用事件委託）
+                headerRow.querySelectorAll('th.sortable').forEach(th => {
+                    th.addEventListener('click', (e) => {
+                        // 避免點擊 resizer 時觸發排序
+                        if (e.target.classList.contains('resizer')) return;
+                        const field = th.dataset.col;
+                        handlePopoutHeaderClick(field);
+                    });
+                });
+
+                // 綁定調整寬度事件
+                headerRow.querySelectorAll('.resizer').forEach(resizer => {
+                    resizer.addEventListener('mousedown', (e) => {
+                        e.stopPropagation();
+                        const th = resizer.parentElement;
+                        const field = th.dataset.col;
+                        initPopoutResize(e, field);
+                    });
+                });
+
+                // 排序結果
+                const sortedResults = [...results].sort((a, b) => {
+                    let aVal = a[popoutSortField];
+                    let bVal = b[popoutSortField];
+
+                    // 處理日期
+                    if (popoutSortField === 'date') {
+                        aVal = a.date ? new Date(a.date.replace(/\//g, '-')) : new Date(0);
+                        bVal = b.date ? new Date(b.date.replace(/\//g, '-')) : new Date(0);
+                    }
+
+                    // 處理數字
+                    if (popoutSortField === 'score') {
+                        aVal = parseFloat(aVal) || 0;
+                        bVal = parseFloat(bVal) || 0;
+                    }
+
+                    // 轉字串比較
+                    if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+                    if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+
+                    if (aVal < bVal) return popoutSortDirection === 'asc' ? -1 : 1;
+                    if (aVal > bVal) return popoutSortDirection === 'asc' ? 1 : -1;
+                    return 0;
+                });
+
+                // 渲染表格內容
+                tbody.innerHTML = sortedResults.map(record => {
+                    // 樣式類別
+                    let resultClass = 'none';
+                    if (record.result === '勝利') resultClass = 'win';
+                    else if (record.result === '敗北') resultClass = 'lose';
+                    else if (record.result === '平手') resultClass = 'draw';
+
+                    let turnClass = 'none';
+                    if (record.turnOrder === '先手') turnClass = 'first';
+                    else if (record.turnOrder === '後手') turnClass = 'second';
+
+                    const misplayClass = getMisplayClass(record.misplay);
+
+                    const cells = visibleColumns.map(col => {
+                        let content = '';
+                        const width = columnWidths[col.id] ? ` style="width: ${columnWidths[col.id]}"` : '';
+
+                        switch (col.id) {
+                            case 'date':
+                                content = escapeHtml(i18n.formatDate(record.date) || '');
+                                break;
+                            case 'myDeck':
+                            case 'opponentDeck':
+                            case 'gameName':
+                            case 'notes':
+                                content = escapeHtml(record[col.id] || '');
+                                break;
+                            case 'turnOrder':
+                                content = `<span class="turn-badge ${turnClass}">${escapeHtml(i18n.get(record.turnOrder) || '')}</span>`;
+                                break;
+                            case 'result':
+                                content = `<span class="result-badge ${resultClass}">${escapeHtml(i18n.get(record.result) || '')}</span>`;
+                                break;
+                            case 'score':
+                                content = escapeHtml(String(record.score !== undefined ? record.score : ''));
+                                break;
+                            case 'misplay':
+                                const misplayText = escapeHtml(i18n.get(record.misplay) || '');
+                                if (isPopoutMisplayNotesVisible && record.misplayNote) {
+                                    content = `<span class="misplay-badge ${misplayClass}">${misplayText}</span>
+                                             <span class="misplay-note-text">${escapeHtml(record.misplayNote)}</span>`;
+                                } else if (record.misplayNote) {
+                                    content = `<span class="misplay-badge ${misplayClass}" data-tooltip="${escapeHtml(record.misplayNote)}" style="cursor: help;">${misplayText}</span>`;
+                                } else {
+                                    content = `<span class="misplay-badge ${misplayClass}">${misplayText}</span>`;
+                                }
+                                break;
+                        }
+
+                        return `<td${width}>${content}</td>`;
+                    }).join('');
+
+                    return `<tr>${cells}</tr>`;
+                }).join('');
+            }
+
+            /**
+             * Misplay 等級樣式
+             */
+            function getMisplayClass(misplay) {
+                switch (misplay) {
+                    case '嚴重': return 'severe';
+                    case '中等': return 'medium';
+                    case '輕度': return 'light';
+                    default: return 'none';
+                }
+            }
+
+            /**
+             * 處理排序（彈出視窗）
+             */
+            function handlePopoutHeaderClick(field) {
+                if (popoutSortField === field) {
+                    popoutSortDirection = popoutSortDirection === 'asc' ? 'desc' : 'asc';
+                } else {
+                    popoutSortField = field;
+                    popoutSortDirection = 'desc';
+                }
+
+                // 重新渲染表格
+                let searchResults = [];
+                try {
+                    const stored = localStorage.getItem('cardBattleSearchResults');
+                    if (stored) {
+                        searchResults = JSON.parse(stored);
+                    }
+                } catch (e) {
+                    console.error('Failed to load search results:', e);
+                }
+                renderSearchResultsTable(searchResults);
+
+                // 廣播排序狀態變更
+                if (typeof SyncManager !== 'undefined') {
+                    SyncManager.broadcast(SyncManager.EventTypes.SETTINGS_CHANGED, {
+                        popoutSort: { field: popoutSortField, direction: popoutSortDirection }
+                    });
+                }
+            }
+
+            /**
+             * 初始化調整寬度（彈出視窗）
+             */
+            function initPopoutResize(e, field) {
+                currentResizerField = field;
+                const th = e.target.parentElement;
+                startX = e.pageX;
+                startWidth = th.offsetWidth;
+
+                document.body.classList.add('resizing');
+                document.addEventListener('mousemove', handlePopoutResizeMove);
+                document.addEventListener('mouseup', stopPopoutResize);
+            }
+
+            /**
+             * 設定統計摘要簡易顯示模式
+             * @param {boolean} active - 是否開啟簡易模式
+             */
+            function setSimpleStatsMode(active) {
+                const statsGrid = document.querySelector('#popout-content .stats-grid');
+                const btn = document.getElementById('toggle-simple-stats-btn');
+
+                if (!statsGrid || !btn) return;
+
+                if (active) {
+                    statsGrid.classList.add('stats-simple-mode');
+                    btn.innerHTML = '📊 <span data-i18n="btn_standard_display">標準顯示</span>';
+                    localStorage.setItem('statsDisplayMode', 'simple');
+                } else {
+                    statsGrid.classList.remove('stats-simple-mode');
+                    btn.innerHTML = '📋 <span data-i18n="btn_simple_display">簡易顯示</span>';
+                    localStorage.setItem('statsDisplayMode', 'standard');
+                }
+
+                // 重新應用翻譯
+                if (typeof i18n !== 'undefined') {
+                    i18n.translateUI();
+                }
+
+                // 更新網址參數，以便複製網址時能保持狀態
+                try {
+                    const url = new URL(window.location.href);
+                    if (active) {
+                        url.searchParams.set('simple', '1');
+                    } else {
+                        url.searchParams.delete('simple');
+                    }
+                    window.history.replaceState({}, '', url);
+                    console.log(`[StatsView] 已同步更新網址參數: simple=${active ? '1' : '0'}`);
+                } catch (e) {
+                    console.warn('[StatsView] 無法更新網址參數 (可能是在 file:// 下執行):', e);
+                }
+            }
+
+            /**
+             * 切換統計摘要簡易顯示模式
+             */
+            function toggleSimpleStatsMode() {
+                const statsGrid = document.querySelector('#popout-content .stats-grid');
+                if (!statsGrid) return;
+
+                const isCurrentlySimple = statsGrid.classList.contains('stats-simple-mode');
+                setSimpleStatsMode(!isCurrentlySimple);
+            }
+
+            /**
+             * 初始化統計摘要顯示模式
+             */
+            function initStatsDisplayMode() {
+                const mode = localStorage.getItem('statsDisplayMode');
+                const btn = document.getElementById('toggle-simple-stats-btn');
+
+                if (btn && mode === 'simple') {
+                    setSimpleStatsMode(true);
+                }
+            }
+
+            /**
+             * 顯示/隱藏簡易顯示按鈕（僅統計摘要頁面顯示）
+             */
+            function updateSimpleStatsButton(blockId) {
+                const btn = document.getElementById('toggle-simple-stats-btn');
+                if (!btn) return;
+
+                if (blockId === 'stats-grid-wrapper') {
+                    btn.style.display = 'inline-flex';
+                    // 綁定點擊事件
+                    btn.onclick = toggleSimpleStatsMode;
+                    // 初始化顯示模式
+                    setTimeout(initStatsDisplayMode, 100);
+                } else {
+                    btn.style.display = 'none';
+                }
+            }
+
+            /**
+             * 處理調整寬度移動（彈出視窗）
+             */
+            function handlePopoutResizeMove(e) {
+                if (!currentResizerField) return;
+                const diff = e.pageX - startX;
+                const newWidth = Math.max(50, startWidth + diff);
+
+                // 儲存寬度設定
+                const settings = DataManager.getColumnSettings() || { visible: {}, widths: {} };
+                if (!settings.widths) settings.widths = {};
+                settings.widths[currentResizerField] = `${newWidth}px`;
+                DataManager.saveColumnSettings(settings);
+
+                // 即時更新該欄位寬度
+                const ths = document.querySelectorAll(`th[data-col="${currentResizerField}"]`);
+                const tds = document.querySelectorAll(`#search-results-table tbody tr`);
+
+                ths.forEach(th => th.style.width = `${newWidth}px`);
+
+                // 更新對應的 td 寬度
+                const thIndex = Array.from(ths[0]?.parentElement.children || []).indexOf(ths[0]);
+                if (thIndex >= 0) {
+                    tds.forEach(tr => {
+                        const td = tr.children[thIndex];
+                        if (td) td.style.width = `${newWidth}px`;
+                    });
+                }
+
+                // 廣播寬度變更（同步到主頁面）
+                if (typeof SyncManager !== 'undefined') {
+                    SyncManager.broadcast(SyncManager.EventTypes.SETTINGS_CHANGED, {
+                        columnWidths: { [currentResizerField]: `${newWidth}px` }
+                    });
+                }
+            }
+
+            /**
+             * 停止調整寬度（彈出視窗）
+             */
+            function stopPopoutResize() {
+                document.body.classList.remove('resizing');
+                document.removeEventListener('mousemove', handlePopoutResizeMove);
+                document.removeEventListener('mouseup', stopPopoutResize);
+                currentResizerField = null;
+            }
+
+            /**
+             * HTML 轉義
+             */
+            function escapeHtml(text) {
+                if (!text) return '';
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            // 暴露部分函數給全域 (供 HTML inline 事件呼叫)
+            window.renderScoreChart = renderScoreChart;
+            window.applyRowHeight = applyRowHeight;
+            window.PopoutManager = { toggle: (id) => console.log('Popout recursion prevented') }; 
+
+            // 初始化
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', init);
+            } else {
+                init();
+            }
+        })();
+    </script>
+</body>
+
+</html>
